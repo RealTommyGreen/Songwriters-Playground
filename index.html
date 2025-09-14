@@ -1,0 +1,2150 @@
+<!doctype html>
+
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <title>Tommy Green's Audiolooper</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --panel:#111827; --panel-2:#0f172a; --text:#e5e7eb; --text-dim:#9ca3af;
+      --line:#1f2937; --accent:#60a5fa; --danger:#ef4444; --ok:#16a34a; --muted:#334155;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; background:var(--bg); color:var(--text); }
+    body{ margin:0; padding:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }/* ---------- Buch-/Flip-Layout ---------- */
+.scene{
+  position:relative;
+  width:100%;
+  min-height:100vh;
+  perspective: 1800px;
+  overflow:hidden; /* verhindert, dass 3D-Flip hinausragt */
+
+  transform-style: preserve-3d;}
+.book{
+  position:relative;
+  width:100%;
+  min-height:100vh;
+  transform-style: preserve-3d;
+  transition: transform .9s cubic-bezier(.22,.61,.36,1);
+}
+.book.flipped{ transform: rotateY(180deg); }
+
+.page{
+  position:absolute;
+  inset:0;
+  backface-visibility: hidden;
+  overflow:auto;           /* Seite darf scrollen */
+  padding:20px;            /* war vorher body padding */
+  will-change: transform;  /* sanftere Animationen */
+
+  -webkit-backface-visibility: hidden;
+  -moz-backface-visibility: hidden;
+  transform-style: preserve-3d;}
+.page.left{  transform: rotateY(0deg) translateZ(1px); }
+.page.right{ transform: rotateY(180deg)  translateZ(1px); }
+/* Paint order to avoid backface showing in Firefox */
+.book:not(.flipped) .page.left  { z-index: 2; }
+.book:not(.flipped) .page.right { z-index: 1; }
+.book.flipped .page.left        { z-index: 1; }
+.book.flipped .page.right       { z-index: 2; }
+
+
+/* dezente Buchkante/Schimmer */
+.book::before{
+  content:"";
+  position:absolute; inset:0;
+  pointer-events:none;
+  background: radial-gradient(1200px 200px at 50% 50%, rgba(255,255,255,.06), transparent 60%);
+  mix-blend-mode: screen;
+  opacity:.35;
+  transition: opacity .3s ease;
+}
+.book.flipped::before{ opacity:.25; }
+
+/* ---------- Floating Flip-Pfeile ---------- */
+.flip-arrow{
+  position:fixed;
+  top:50%;
+  transform: translateY(-50%);
+  z-index:9999;
+  width:48px; height:48px;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid rgba(96,165,250,.35);
+  border-radius:999px;
+  background: linear-gradient(180deg,#0b1220,#09101c);
+  box-shadow: 0 8px 30px rgba(0,0,0,.45), 0 0 0 5px rgba(59,130,246,.08);
+  cursor:pointer;
+  transition: transform .15s ease, box-shadow .2s ease, border-color .2s ease, opacity .2s ease;
+  user-select:none;
+}
+.flip-arrow:hover{
+  border-color:#3b82f6;
+  box-shadow: 0 10px 36px rgba(0,0,0,.55), 0 0 0 6px rgba(59,130,246,.14);
+  transform: translateY(-50%) scale(1.05);
+}
+.flip-arrow:active{ transform: translateY(-50%) scale(.98); }
+.flip-arrow.right{ right:14px; }
+.flip-arrow.left{ left:14px; display:none; } /* Start: nur rechts sichtbar */
+
+.flip-arrow svg{ width:26px; height:26px; }
+
+/* ---------- Bisherige Styles (unverändert) ---------- */
+h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color:#f8fafc; text-align:center; }
+.card{ border:1px solid var(--line); background:linear-gradient(180deg,var(--panel),var(--panel-2)); border-radius:16px; padding:16px; box-shadow:0 4px 24px rgba(0,0,0,.35); }
+.grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.stack{ display:grid; gap:14px; }
+.section-gap{ height:28px; }
+.v-gap{ height:18px; }
+
+.btn{
+  appearance:none; cursor:pointer; border:1px solid var(--muted);
+  background:#0b1220; color:var(--text); border-radius:12px; padding:12px 14px;
+  font-weight:700; letter-spacing:.2px; transition:.15s transform ease,.15s background-color ease,.15s border-color ease,.15s box-shadow ease;
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+}
+.btn:hover{ border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,.15) inset; }
+.btn.primary{ background:linear-gradient(180deg,#1e293b,#0b1220); border-color:#3b82f6; color:#dbeafe; }
+.btn.ok{ border-color:#15803d; color:#dcfce7; }
+.btn.warn{ border-color:#b91c1c; color:#fee2e2; }
+.btn.big{ padding:18px 20px; font-size:18px; border-radius:14px; background:linear-gradient(180deg,#0b1220,#09101c); }
+.btn:active{ transform:translateY(1px); }
+
+.file{ display:none; }
+
+.label{ font-size:12px; color:var(--text-dim); margin-bottom:6px; }
+.field{
+  background:#0b1220; border:1px solid var(--muted); color:#e5e7eb;
+  border-radius:12px; padding:10px 12px; width:100%; font-weight:600;
+}
+.mono{ font-variant-numeric: tabular-nums; font-family: ui-monospace,SFMono-Regular,Menlo,monospace; }
+.filename-chip{
+  display:flex; align-items:center; gap:8px; border:1px solid var(--muted);
+  background:rgba(99,102,241,.06); border-radius:12px; padding:10px 12px; min-height:44px; color:#c7d2fe;
+}
+.filename-chip .dot{ width:8px; height:8px; border-radius:999px; background:#c084fc; box-shadow:0 0 8px #c084fc; }
+
+#wave{
+  width:100%; height:240px; display:block;
+  background:linear-gradient(180deg,#0c1423,#0a1320);
+  border:1px solid var(--muted); border-radius:14px; touch-action:none;
+}
+.under-time{
+  margin-top:8px; text-align:center; font-size:13px; color:#cbd5e1;
+  background:#0b1220; border:1px solid var(--muted); border-radius:10px; padding:8px 10px;
+  display:inline-block;
+}
+
+.markerList{ display:grid; gap:10px; }
+.markerRow{ display:grid; grid-template-columns:28px 1fr auto auto; gap:10px; align-items:center; border:1px solid var(--muted); background:#0b1220; border-radius:12px; padding:8px; }
+.dragHandle{ width:24px; height:24px; display:flex; align-items:center; justify-content:center; cursor:grab; user-select:none; 
+  touch-action: none; /* verhindert Scroll während Touch-Drag */}
+.markerRow.dragging{ opacity:.6; }
+.markerRow.drop-before{ box-shadow:0 -2px 0 0 var(--accent) inset; }
+.markerRow.drop-after{  box-shadow:0  2px 0 0 var(--accent) inset; }
+
+/* --- Enhanced drag/drop visuals for marker list --- */
+.markerRow{ position:relative; transition: transform .15s ease, box-shadow .15s ease, background .15s ease; }
+.dragHandle:active{ cursor:grabbing; }
+.markerRow.dragging{
+  opacity:1;
+  transform: translateY(-1px) scale(1.015);
+  box-shadow: 0 12px 30px rgba(0,0,0,.55), 0 0 0 2px rgba(96,165,250,.18) inset;
+  z-index: 2;
+}
+.markerRow.drop-target{
+  transform: translateY(0) scale(1.01);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+/* Replace thin inset borders with elegant glowing bars */
+.markerRow.drop-before::before,
+.markerRow.drop-after::after{
+  content:"";
+  position:absolute; left:8px; right:8px; height:4px;
+  border-radius:999px;
+  background: linear-gradient(90deg, rgba(59,130,246,0), rgba(59,130,246,.9), rgba(59,130,246,0));
+  box-shadow: 0 0 12px rgba(59,130,246,.45);
+  pointer-events:none;
+}
+.markerRow.drop-before::before{ top:-2px; }
+.markerRow.drop-after::after{ bottom:-2px; }
+/* --- End enhanced visuals --- */
+
+.icon{ display:inline-block; line-height:0; }
+.icon svg{ width:20px; height:20px; }
+.icon.play svg{ width:28px; height:28px; }
+.icon.stop svg{ width:26px; height:26px; }
+
+/* Scrollbar dezent (Option) */
+.page::-webkit-scrollbar{ width:10px; }
+.page::-webkit-scrollbar-thumb{ background:#1f2937; border-radius:999px; }
+.page::-webkit-scrollbar-track{ background:transparent; }
+
+/* ---------- Rechter Texteditor ---------- */
+.note-wrap{ max-width: 900px; margin:0 auto; display:grid; gap:14px; }
+.note-stats{ color:#cbd5e1; font-size:13px; text-align:center; }
+.lyricsList{ display:grid; gap:10px; }
+.lyricsRow{
+  display:grid; grid-template-columns: 48px 1fr; gap:10px; align-items:center;
+  border:1px solid var(--muted); background:#0b1220; border-radius:12px; padding:10px;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.lyricsRow .idx{
+  width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+  background:#0c1423; border:1px solid var(--line); color:#93c5fd; font-weight:800;
+  user-select:none;
+}
+.lyricsRow .line{
+  min-height:40px; outline:none; white-space:pre-wrap; word-break:break-word;
+}
+.lyricsRow.active{ border-color:#60a5fa; box-shadow:0 0 0 3px rgba(59,130,246,.15) inset; background:linear-gradient(180deg,#0b1220,#0a1320); }
+.note-hint{ color:#94a3b8; font-size:12px; text-align:center; }
+/* --- Zusatz: Segment-Header & Toolbar & Toggle --- */
+.note-tools{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+.btn.toggle.active{ border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,.2) inset; }
+.segmentHeader{
+  grid-column:1 / -1;
+  margin:18px 0 6px 0;
+  padding:10px 12px;
+  border:1px dashed var(--line);
+  background:#0c1423;
+  color:#93c5fd;
+  border-radius:12px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.4px;
+  opacity:.9;
+}
+  /* Export button container (rechtsbündig unter den Textzeilen) */
+  .note-export{
+    display:flex;
+    justify-content:flex-end;
+    margin-top:10px;
+  }
+
+
+
+  
+/* Quick-Loop aktivierte Zeilennummern */
+.lyricsRow .idx.ql-active{
+  border-color: var(--danger);
+  color: #fecaca;
+  background: #1a0f12;
+  box-shadow: 0 0 0 3px rgba(239,68,68,.18) inset;
+}
+
+</style>
+</head>
+<body>  <!-- Floating Flip-Pfeile -->  <button id="toRight" class="flip-arrow right" aria-label="Zur rechten Seite wechseln" title="Zur rechten Seite wechseln">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M9 5l7 7-7 7" stroke="#93c5fd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+  <button id="toLeft" class="flip-arrow left" aria-label="Zur linken Seite wechseln" title="Zur linken Seite wechseln">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M15 5l-7 7 7 7" stroke="#93c5fd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>  <div class="scene">
+    <div id="book" class="book">
+      <!-- Linke Seite (bestehende App) -->
+      <section class="page left">
+        <h1>Tommy's Audiolooper</h1>
+        <div class="card stack"><!-- Row 1: Lade/ Speichere Projekt -->
+      <div class="grid-2">
+        <label class="btn primary" for="loadProjectFile">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          Lade Projekt
+        </label>
+        <button id="saveProject" class="btn">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M17 3H7a2 2 0 0 0-2 2v14l7-3 7 3V5a2 2 0 0 0-2-2z" stroke="#93c5fd" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          Speichere Projekt
+        </button>
+        <input id="loadProjectFile" type="file" accept="application/json,.json" class="file" />
+      </div>
+
+      <!-- Row 2: Öffne Datei / Zurücksetzen -->
+      <div class="grid-2">
+        <label class="btn" for="file">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0l3 3m-3-3L9 7M4 20h16" stroke="#a5b4fc" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          Öffne Datei
+        </label>
+        <button id="clearBtn" class="btn warn">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#fecaca" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </span>
+          Zurücksetzen
+        </button>
+        <input id="file" type="file" accept=".mp3,.wav,audio/*" class="file" />
+      </div>
+
+      <!-- Row 3: Dateiname / BPM -->
+      <div class="grid-2">
+        <div>
+          <div class="label">Dateiname</div>
+          <div class="filename-chip"><span class="dot"></span><span id="fileInfo">–</span></div>
+        </div>
+        <div>
+          <div class="label">Tempo (BPM)</div>
+          <input id="bpm" type="number" min="1" max="999" step="0.01" class="field mono" / placeholder=""/>
+  <button id="tapBpm" class="btn" style="margin-top:8px;width:100%;" title="Tippe im Takt">Tap BPM</button>
+
+        </div>
+      </div>
+
+      <!-- Waveform -->
+      <div class="section-gap"></div>
+      <canvas id="wave" height="240" aria-label="Wellenform"></canvas>
+      <div style="text-align:center">
+        <span class="under-time mono">Cursor: <span id="curLabel">0:00.000</span></span>
+      </div>
+
+      <!-- Marker setzen / entfernen -->
+      <div class="v-gap"></div>
+      <div class="grid-2">
+        <button id="addMarker" class="btn ok">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#86efac" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </span>
+          Marker setzen
+        </button>
+        <button id="deleteMarker" class="btn warn">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#fecaca" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </span>
+          Marker entfernen
+        </button>
+      </div>
+
+      <!-- Großer Play / Stop -->
+      <div class="v-gap"></div>
+      <div class="grid-2">
+        <button id="playSel" class="btn big primary">
+          <span class="icon play"><svg viewBox="0 0 24 24" fill="#93c5fd"><path d="M8 5v14l11-7z"/></svg></span>
+          Abspielen
+        </button>
+        <button id="pauseBtn" class="btn big">
+          <span class="icon stop"><svg viewBox="0 0 24 24" fill="#fca5a5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></span>
+          Stop
+        </button>
+      </div>
+
+      <!-- Marker-Liste -->
+      <div class="v-gap"></div>
+      <div class="label" style="font-size:13px;color:#cbd5e1;">Marker</div>
+
+<!-- NEU: Reihenfolge-Schalter -->
+<div id="markerSeqControls" class="card" style="padding:10px; margin-bottom:10px; display:flex; align-items:center; gap:10px;">
+  <label class="btn toggle" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
+    <input id="playSeqToggle" type="checkbox" style="width:18px;height:18px; accent-color:#60a5fa; cursor:pointer;" />
+    <span>Custom Arrangement</span>
+  </label>
+  <div id="seqInfo" class="label" style="margin:0; opacity:.9;">Sortiere Marker per Drag and Drop. Bei Aktivierung wird diese Reihenfolge gespielt.</div>
+</div>
+
+<div id="markerList" class="markerList"></div>
+
+      <input id="loadAudioForProject" type="file" accept=".mp3,.wav,audio/*" class="file" />
+    </div>
+  </section>
+
+  <!-- Rechte Seite: Texteditor gekoppelt an 2-Takt-Gruppen -->
+  <section class="page right">
+    <h1>Tommy's Notebook</h1>
+    <div class="card note-wrap">
+      <div class="note-tools">
+        <button id="toggleAutoscroll" class="btn toggle" title="Automatisches Scrollen ein/aus">Autoscroll: An</button>
+        <button id="importMarkersBtn" class="btn toggle" title="Marker in Editor übernehmen">Marker übernehmen</button>
+      </div>
+
+      <div class="lyricsList" id="lyricsList"></div>
+        <div class="note-export">
+          <button id="exportTxtBtn" class="btn">Export</button>
+        </div>
+    </div>
+  </section>
+</div>
+
+  </div>  <!-- ---------- Bisheriges Skript + Flip-Logik ---------- -->  <script>
+    /* Flip-Steuerung (neue, isolierte Logik) */
+    const book = document.getElementById('book');
+    const toRight = document.getElementById('toRight');
+    const toLeft  = document.getElementById('toLeft');
+
+    function showRight(){
+      book.classList.add('flipped');
+      toRight.style.display = 'none';
+      toLeft.style.display  = 'flex';
+    }
+    function showLeft(){
+      book.classList.remove('flipped');
+      toLeft.style.display  = 'none';
+      toRight.style.display = 'flex';
+    }
+    toRight.addEventListener('click', showRight);
+    toLeft .addEventListener('click', showLeft);
+
+    // ESC wechselt zurück zur linken Seite (Quality-of-Life)
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape' && book.classList.contains('flipped')) showLeft();
+    });
+  </script>  <script>
+    // --- DOM ---
+    const fileInput = document.getElementById('file');
+    const clearBtn = document.getElementById('clearBtn');
+    const saveProjectBtn = document.getElementById('saveProject');
+    const loadProjectInput = document.getElementById('loadProjectFile');
+    const loadAudioForProject = document.getElementById('loadAudioForProject');
+    const fileInfo = document.getElementById('fileInfo');
+
+    const bpmInput = document.getElementById('bpm');
+    const playSel = document.getElementById('playSel');
+    const pauseBtn = document.getElementById('pauseBtn');
+
+    const addMarkerBtn = document.getElementById('addMarker');
+    const deleteMarkerBtn = document.getElementById('deleteMarker');
+
+    const markerListEl = document.getElementById('markerList');
+    
+    // Reihenfolge-Playback DOM
+    const playSeqToggle = document.getElementById('playSeqToggle');
+    const seqInfo = document.getElementById('seqInfo');
+const wave = document.getElementById('wave');
+    const curLabel = document.getElementById('curLabel');
+    const ctx = wave.getContext('2d');
+
+    // --- Rechter Editor DOM ---
+    const lyricsListEl = document.getElementById('lyricsList');
+    const linesInfoEl = document.getElementById('linesInfo');
+    const importMarkersBtn = document.getElementById('importMarkersBtn');
+    const exportTxtBtn = document.getElementById('exportTxtBtn');
+    const toggleAutoscrollBtn = document.getElementById('toggleAutoscroll');
+
+    // --- Tap-to-BPM ---
+    const tapBpmBtn = document.getElementById('tapBpm');
+    if (tapBpmBtn) {
+      const tapTimes = [];
+      let lastTapMs = 0;
+      tapBpmBtn.addEventListener('click', ()=>{
+        const now = performance.now();
+        // Reset if last tap was too long ago
+        if (now - lastTapMs > 2000) tapTimes.length = 0;
+        tapTimes.push(now);
+        lastTapMs = now;
+
+        if (tapTimes.length >= 2) {
+          // Use up to last 8 intervals
+          const diffs = tapTimes.slice(-9).map((t,i,arr)=> i>0 ? (t - arr[i-1]) / 1000 : null).filter(v=> v !== null);
+          if (diffs.length > 0) {
+            // Optional: basic outlier guard
+            const avg = diffs.reduce((a,b)=>a+b,0) / diffs.length;
+            let est = 60 / avg;
+            // Clamp + round to next full integer
+            est = Math.max(1, Math.min(999, est));
+            const rounded = Math.round(est);
+            bpmInput.value = String(rounded);
+
+            try {
+              // Recompute derived values
+              minView = Math.max(0.25, gridStep()/4);
+              // Rebuild text rows but keep existing content
+              rebuildLyrics({ preserve: true });
+              draw();
+              if (usingEngine) resumeWithUpdatedLoopPreservingPhase();
+            } catch(_){}
+          }
+        }
+      });
+    }
+
+
+    // --- State ---
+    let objectUrl = null, relativeAudioName = null;
+    let duration = 0, audioBuffer = null, sampleRate = 44100;
+    // Reihenfolge-Playback State
+    let playSeqOrder = false;
+    let seqCurrentStartId = null;
+
+    let loadedFileMeta = null;
+
+    const BEATS_PER_BAR = 4;
+    const EPS = 1e-6;
+
+    
+    // Oberer/unterer Rahmenbereich außerhalb der Waveform
+    const FRAME_PAD = 52;
+
+// Marker: { id, time, label, active, listOrder }
+    let markers = [];
+    let cursorTime = 0;
+
+    // Lyrics/Textzeilen-State (eine Zeile = 2 Takte)
+    let lyrics = []; // Array<string>
+    let markerHeaders = []; // aus Markern generierte Abschnittsüberschriften
+    let perSegmentLineNumbering = false;
+    let autoScrollEnabled = true; // Autoscroll-Toggle
+    let lastActiveLine = -1; // Index der aktuell gehighlighteten Zeile
+
+    // Viewport
+    let viewStart = 0;   // s
+    let viewDur = 0;     // s
+    let minView = 0.25;
+
+    // Gesten
+    const activePointers = new Map();
+    let draggingCursor=false, draggingPan=false;
+    let panStartX=0, panStartViewStart=0;
+    let pinchStartDist = 0, pinchCenterTime = 0, pinchStartViewDur = 0;
+
+    
+    // NEU: Tap-to-seek
+    let tapCandidate = false;   // echter Tap ohne nennenswerte Bewegung?
+    let downX = 0, downY = 0;   // Startposition für Tap-/Pan-Erkennung
+    // Tap auf Marker-Label?
+    let tapOnMarkerLabel = false;
+// Label-Interaktion
+    const renderHit = new Map();
+    let tapTimer=null, lastTapId=null, longTimer=null, draggingMarkerId=null;
+
+    // WebAudio
+    let ac=null, masterGain=null, engineSource=null, engineGain=null, usingEngine=false;
+    let rafId=0, engineStartCtxTime=0, engineStartOffset=0;
+
+    // --- Utils ---
+    function uid(){ return Math.random().toString(36).slice(2,9); }
+    function clamp(v,min,max){ return Math.min(max,Math.max(min,v)); }
+    function formatTime(t){
+      if(!isFinite(t)) t=0;
+      const h = Math.floor(t/3600);
+      const m = Math.floor((t%3600)/60);
+      const s = Math.floor(t%60);
+      const ms = Math.round((t%1)*1000);
+      if(h>0) return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${ms.toString().padStart(3,'0')}`;
+      return `${m}:${s.toString().padStart(2,'0')}.${ms.toString().padStart(3,'0')}`;
+    }
+    function shortTimeLabel(t){
+      const h = Math.floor(t/3600), m = Math.floor((t%3600)/60), s = Math.floor(t%60);
+      if(h>0) return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+      if(m>0) return `${m}:${s.toString().padStart(2,'0')}`;
+      return `${s}s`;
+    }
+    function bpm(){ const v=parseFloat(bpmInput.value); return isFinite(v)&&v>0?v:120; }
+    function barLen(){ return (60 / bpm()) * BEATS_PER_BAR; }
+    function gridStep(){ return barLen()*2; }
+    function snapToGrid(t){ const step=gridStep(); return Math.round(t/step)*step; }
+    function viewEnd(){ return viewStart + viewDur; }
+    function setView(start, dur){
+      if(duration<=0){ viewStart=0; viewDur=0; return; }
+      const minDur = Math.min(Math.max(minView, gridStep()/4), duration);
+      const newDur = clamp(dur, minDur, duration);
+      const maxStart = Math.max(0, duration - newDur);
+      viewStart = clamp(start, 0, maxStart);
+      viewDur = newDur;
+    }
+    function timeToX(t, w){ return ((t - viewStart) / viewDur) * w; }
+    function xToTime(x, w){ return viewStart + (x / w) * viewDur; }
+// --- List-Order Helpers for draggable marker list ---
+function ensureListOrder(){
+  if(!Array.isArray(markers)) return;
+  let changed = false;
+  for(let i=0;i<markers.length;i++){
+    if(!Number.isFinite(markers[i].listOrder)){ markers[i].listOrder = i; changed = true; }
+  }
+  if(changed){
+    markers.sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
+  }
+}
+function reindexListOrder(){
+  markers.forEach((m,i)=> m.listOrder = i);
+}
+function reorderById(dragId, newIndex){
+  const ordered = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
+  const from = ordered.findIndex(m=>m.id===dragId);
+  if(from<0) return;
+  // Prevent moving pinned start/end directly
+  if(ordered[from].pin !== 'start' && ordered[from].pin !== 'end'){
+    // Remove the dragged item
+    const [item] = ordered.splice(from,1);
+    // Compute safe insertion window (after start, before end if present)
+    const sIdx = ordered.findIndex(m=>m.pin==='start');
+    let eIdx = ordered.findIndex(m=>m.pin==='end');
+    let target = Math.max(0, Math.min(newIndex, ordered.length));
+    if(sIdx !== -1) target = Math.max(target, 1);
+    eIdx = ordered.findIndex(m=>m.pin==='end');
+    if(eIdx !== -1) target = Math.min(target, eIdx);
+    ordered.splice(target, 0, item);
+  }
+  // Enforce pinned positions: start first, end last
+  let idxS = ordered.findIndex(m=>m.pin==='start');
+  if(idxS > 0){ const [s] = ordered.splice(idxS,1); ordered.unshift(s); }
+  let idxE = ordered.findIndex(m=>m.pin==='end');
+  if(idxE >= 0 && idxE !== ordered.length-1){ const [e] = ordered.splice(idxE,1); ordered.push(e); }
+  ordered.forEach((m,i)=> m.listOrder = i);
+  markers = ordered; // keep array in UI order
+}
+
+// Insert a marker so that UI order is: [auto-Start] + others ASC by time + [auto-End]
+function insertMarkerAscending(newM){
+  ensureListOrder();
+  const ordered = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
+  const hasStart = ordered.some(m=>m.pin==='start');
+  const hasEnd   = ordered.some(m=>m.pin==='end');
+  const middle = ordered.filter(m=> m.pin!=='start' && m.pin!=='end');
+  // Find insertion index within middle by time ascending
+  let ins = middle.findIndex(m=> newM.time <= m.time);
+  if(ins < 0) ins = middle.length;
+  middle.splice(ins, 0, newM);
+  let rebuilt = [];
+  if(hasStart){ const s = ordered.find(m=>m.pin==='start'); if(s) rebuilt.push(s); }
+  rebuilt = rebuilt.concat(middle);
+  if(hasEnd){ const e = ordered.find(m=>m.pin==='end'); if(e) rebuilt.push(e); }
+  if(!hasStart && !hasEnd){ rebuilt = ordered.concat([newM]).sort((a,b)=> a.time - b.time); }
+  if(hasStart && !hasEnd){
+    const rest = ordered.filter(m=> m.pin!=='start');
+    const tmp = rest.concat([newM]).sort((a,b)=> a.time - b.time);
+    rebuilt = [ordered.find(m=>m.pin==='start')].concat(tmp);
+  }
+  if(!hasStart && hasEnd){
+    const rest = ordered.filter(m=> m.pin!=='end');
+    const tmp = rest.concat([newM]).sort((a,b)=> a.time - b.time);
+    rebuilt = tmp.concat([ordered.find(m=>m.pin==='end')]);
+  }
+  rebuilt.forEach((m,i)=> m.listOrder = i);
+  markers = rebuilt;
+}
+
+
+    function getActiveMarkersSorted(){
+      return markers.filter(m=>m.active).sort((a,b)=>a.time-b.time).slice(0,2);
+    }
+    function ensureMaxTwoActive(toggled){
+      const act = markers.filter(m=>m.active);
+      if(act.length <= 2) return;
+      const others = act.filter(m=>m.id!==toggled.id);
+      let closest = others[0], best = Math.abs(others[0].time - toggled.time);
+      for(let i=1;i<others.length;i++){
+        const d = Math.abs(others[i].time - toggled.time);
+        if(d < best){ best = d; closest = others[i]; }
+      }
+      closest.active = false;
+    }
+
+    // --- Loop / Playback ---
+    
+// === Quick Loop: State & Helpers ===
+const quickLoop = { active:false, a:null, b:null };
+let qlLongTimer = null;
+const QL_LONG_MS = 350;   // Long-Press Schwelle
+const QL_MOVE_TOL = 8;    // Bewegungs-Toleranz gegen versehentliches Ziehen
+
+function lineStartTimeFromIndex(lineIdx0){
+  const bl = barLen();         // 1 Takt
+  return Math.max(0, lineIdx0 * 2 * bl); // 2 Takte pro Zeile
+}
+function applyQuickLoopClasses(){
+  const rows = lyricsListEl.querySelectorAll('.lyricsRow');
+  rows.forEach((row, i)=>{
+    const idxEl = row.querySelector('.idx');
+    if(!idxEl) return;
+    idxEl.classList.remove('ql-active');
+    if(quickLoop.active){
+      if(i === quickLoop.a || i === quickLoop.b) idxEl.classList.add('ql-active');
+    }
+  });
+}
+function clearQuickLoop(){
+  quickLoop.active = false; quickLoop.a = null; quickLoop.b = null;
+  applyQuickLoopClasses(); draw();
+  if(usingEngine) resumeWithUpdatedLoopPreservingPhase();
+}
+function setQuickLoopFromLines(i0, i1){
+  const a = Math.min(i0, i1), b = Math.max(i0, i1);
+  quickLoop.active = true; quickLoop.a = a; quickLoop.b = b;
+  applyQuickLoopClasses(); draw();
+  if(usingEngine) resumeWithUpdatedLoopPreservingPhase();
+}
+// === End Quick Loop: State & Helpers ===
+
+
+function getLoopRegion(){
+  // 1) Quick-Loop hat Vorrang, wenn Start und Ende gesetzt
+  if(quickLoop.active && quickLoop.a !== null && quickLoop.b !== null){
+    const s = lineStartTimeFromIndex(Math.min(quickLoop.a, quickLoop.b));
+    const e = lineStartTimeFromIndex(Math.max(quickLoop.a, quickLoop.b)) + gridStep(); // + 2 Takte
+    return { s: clamp(s,0,duration), e: clamp(e,0,duration), mode:'quick' };
+  }
+  // 2) Fallback: Marker
+  const act = getActiveMarkersSorted();
+  if(act.length===2){
+    const s=Math.min(act[0].time,act[1].time), e=Math.max(act[0].time,act[1].time);
+    return { s, e, mode:'markers' };
+  }
+  return { s:0, e:duration, mode:'full' };
+}
+
+    function getPlayheadTime(){
+  if(usingEngine && ac && engineSource){
+    const { s, e, mode } = getLoopRegion();
+    const tCtx = ac.currentTime - engineStartCtxTime;
+    let t = engineStartOffset + tCtx;
+
+    if (mode === 'markers' || mode === 'quick') {
+      // Erst NACH dem Ende wrappen – bis dahin echte "lineare" Zeit anzeigen
+      if (t >= e) {
+        const L = Math.max(1e-9, e - s);
+        // ab dem ersten Überschreiten von e in [s, e) wrappen
+        t = s + ((((t - e) % L) + L) % L);
+      }
+      // Vor dem ersten Pass darf t auch < s sein, wenn außerhalb gestartet wurde
+    }
+    return clamp(t, 0, duration);
+  }
+  return cursorTime;
+}
+
+    function startPump(){
+      if(rafId) cancelAnimationFrame(rafId);
+      const pump = () => {
+        const t = getPlayheadTime();
+        cursorTime = t;
+        curLabel.textContent = formatTime(t);
+        draw();
+        updateLyricsHighlight(t);
+        rafId = requestAnimationFrame(pump);
+      };
+      rafId = requestAnimationFrame(pump);
+    }
+    function stopPump(){
+      if(rafId){ cancelAnimationFrame(rafId); rafId=0; }
+    }
+
+    function ensureAC(){ if(!ac){ const AC=window.AudioContext||window.webkitAudioContext; ac=new AC(); masterGain=ac.createGain(); masterGain.gain.value=1; masterGain.connect(ac.destination); } }
+    async function ensureACResumed(){ ensureAC(); try{ await ac.resume(); }catch(_){ } }
+
+    function stopEngine(){
+  // Nur wenn gerade gespielt wird: aktuellen Playhead erfassen und snappen
+  const wasPlaying = usingEngine && ac && engineSource;
+  let snapped = null;
+  if (wasPlaying) {
+    const tNow = getPlayheadTime();
+    snapped = clamp(snapToGrid(tNow), 0, duration || 0);
+  }
+
+  // Engine sauber stoppen
+  if (engineSource){ try{ engineSource.stop(); }catch(_){} try{ engineSource.disconnect(); }catch(_){} engineSource = null; }
+  if (engineGain){ try{ engineGain.disconnect(); }catch(_){} engineGain = null; }
+  usingEngine = false;
+  stopPump();
+
+  // Cursor auf Raster setzen (nur wenn vorher Playback lief)
+  if (wasPlaying && snapped !== null) {
+    cursorTime = snapped;
+    curLabel.textContent = formatTime(cursorTime);
+  }
+
+  draw();
+  updateLyricsHighlight(cursorTime);
+}
+
+  function startEngineAt(offset){
+  if(!audioBuffer) return alert('Bitte zuerst eine Audiodatei laden.');
+  ensureAC();
+
+  if(engineSource){ try{engineSource.stop();}catch(_){} try{engineSource.disconnect();}catch(_){} }
+  const loop = getLoopRegion();
+  const src = ac.createBufferSource();
+  src.buffer = audioBuffer;
+
+  // Looping aktivieren, aber NICHT den Start künstlich in den Loopbereich zwingen
+  src.loop = (loop.mode === 'markers' || loop.mode === 'quick');
+  src.loopStart = loop.s;
+  src.loopEnd = (loop.e > 0 ? loop.e : duration);
+
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0, ac.currentTime);
+  g.gain.linearRampToValueAtTime(1, ac.currentTime + 0.01);
+  src.connect(g); g.connect(masterGain);
+
+  engineSource = src;
+  engineGain = g;
+
+  // Start exakt ab Cursor (egal ob innerhalb oder außerhalb des Loopbereichs)
+  const startAt = clamp(offset, 0, duration);
+  engineStartCtxTime = ac.currentTime;
+  engineStartOffset  = startAt;
+
+  try { src.start(ac.currentTime, startAt); } catch(e){ console.warn(e); return; }
+  usingEngine = true;
+  startPump();
+  updateLyricsHighlight(startAt);
+}
+
+    function restartEngineAt(t){ if(!audioBuffer) return; startEngineAt(t); }
+
+    function resumeWithUpdatedLoopPreservingPhase(){
+      if(!usingEngine){ draw(); updateLyricsHighlight(cursorTime); return; }
+      const prevT = getPlayheadTime();
+      const {s,e} = getLoopRegion();
+      let target = prevT;
+      if(prevT < s || prevT >= e) target = s;
+      startEngineAt(target);
+    }
+
+    // ---------- Texteditor-Logik ----------
+    function computeCounts(){
+      if(!duration || !isFinite(duration)) return { bars:0, lines:0 };
+      const bl = barLen();
+      if(!isFinite(bl) || bl<=0) return { bars:0, lines:0 };
+      const bars = Math.floor((duration + EPS) / bl); // nur volle Takte
+      const lines = Math.floor(bars / 2); // 2 Takte pro Zeile
+      return { bars, lines };
+    }
+
+        function renderLyricsList(){
+      const { bars, lines } = computeCounts();
+      if (linesInfoEl) linesInfoEl.textContent = `Takte: ${bars} • Zeilen: ${lines}`;
+      lyricsListEl.innerHTML = '';
+
+      // Map der Segment-Header pro Zeile (1-basiert)
+      const headersByLine = new Map();
+      markerHeaders.forEach(h=>{
+        if(h.lineIdx>=1 && h.lineIdx<=lines){
+          if(!headersByLine.has(h.lineIdx)) headersByLine.set(h.lineIdx, []);
+          headersByLine.get(h.lineIdx).push(h);
+        }
+      });
+      // --- Berechnung der Segmentstarts für per-segment Zeilennummern ---
+      let segStarts = [];
+      if (perSegmentLineNumbering && Array.isArray(markerHeaders) && markerHeaders.length > 0) {
+        const s = new Set();
+        markerHeaders.forEach(h => { if (Number.isFinite(h.lineIdx)) s.add(Math.max(1, Math.floor(h.lineIdx))); });
+        segStarts = Array.from(s).sort((a,b)=>a-b);
+        if (segStarts[0] !== 1) segStarts.unshift(1);
+      }
+      let segPtr = 0;
+
+
+      for(let i=0;i<lines;i++){
+        // Segment-Header VOR der Zeile einfügen (i ist 0-basiert, Lines 1-basiert)
+        const headers = headersByLine.get(i+1) || [];
+        headers.sort((a,b)=> a.bar - b.bar);
+        headers.forEach(h=>{
+          const seg = document.createElement('div');
+          seg.className = 'segmentHeader';
+          seg.textContent = `${h.label}`;
+          lyricsListEl.appendChild(seg);
+        });
+
+        const row = document.createElement('div'); row.className = 'lyricsRow'; row.dataset.idx = i;
+        const idx = document.createElement('div'); idx.className = 'idx'; let __displayIdx = i + 1;
+        if (perSegmentLineNumbering && segStarts.length) {
+          while ((segPtr + 1) < segStarts.length && (i + 1) >= segStarts[segPtr + 1]) segPtr++;
+          __displayIdx = (i + 1) - segStarts[segPtr] + 1;
+        }
+        idx.textContent = String(__displayIdx);
+// --- Tap & Long-Press auf die Zeilennummer ---
+let downX=0, downY=0, pressed=false, longFired=false;
+idx.addEventListener('pointerdown', (ev)=>{
+  idx.setPointerCapture?.(ev.pointerId);
+  pressed=true; longFired=false;
+  downX=ev.clientX; downY=ev.clientY;
+  qlLongTimer = setTimeout(()=>{
+    longFired = true;
+    if(!quickLoop.active){
+      quickLoop.active = true; quickLoop.a = i; quickLoop.b = null;
+    }else if(quickLoop.active && quickLoop.b===null){
+      if(i === quickLoop.a){
+        clearQuickLoop();
+      }else{
+        setQuickLoopFromLines(quickLoop.a, i);
+      }
+    }else{
+      if(i === quickLoop.a || i === quickLoop.b){
+        clearQuickLoop();
+      }else{
+        quickLoop.active = true; quickLoop.a = i; quickLoop.b = null;
+        applyQuickLoopClasses(); draw();
+        if(usingEngine) resumeWithUpdatedLoopPreservingPhase();
+      }
+    }
+    applyQuickLoopClasses();
+  }, QL_LONG_MS);
+});
+idx.addEventListener('pointermove', (ev)=>{
+  if(!pressed) return;
+  if(Math.hypot(ev.clientX-downX, ev.clientY-downY) > QL_MOVE_TOL){
+    clearTimeout(qlLongTimer); qlLongTimer = null;
+  }
+});
+idx.addEventListener('pointerup', (ev)=>{
+  if(!pressed) return;
+  pressed=false;
+  clearTimeout(qlLongTimer); qlLongTimer=null;
+  if(!longFired){
+    const t = lineStartTimeFromIndex(i);
+    setCursor(t, true);
+    if(usingEngine) restartEngineAt(cursorTime);
+    draw();
+  }
+  idx.releasePointerCapture?.(ev.pointerId);
+});
+idx.addEventListener('pointercancel', ()=>{
+  pressed=false;
+  clearTimeout(qlLongTimer); qlLongTimer=null;
+});
+
+        const line = document.createElement('div'); line.className = 'line'; line.contentEditable = 'true'; line.spellcheck = false;
+        line.textContent = lyrics[i] || '';
+        line.addEventListener('input', ()=>{ lyrics[i] = line.textContent; });
+        row.appendChild(idx); row.appendChild(line);
+        lyricsListEl.appendChild(row);
+      }
+      applyQuickLoopClasses();
+    }
+    
+
+    function rebuildLyrics({ preserve=true }={}){
+      const { lines } = computeCounts();
+      if(preserve){
+        lyrics.length = lines; // schneidet ab oder verlängert mit leeren Einträgen
+      }else{
+        lyrics = new Array(lines).fill('');
+      }
+      renderLyricsList();
+    }
+
+// -- Default-Start/End-Marker, falls noch keine Marker existieren --
+// macht beide Marker sofort AKTIV
+function ensureDefaultStartEndMarkers() {
+  if (!Number.isFinite(duration) || duration <= 0) return;
+  if (Array.isArray(markers) && markers.length === 0) {
+    const startM = { id: uid(), time: 0,        label: 'Start', active: true,  pin: 'start', listOrder: 0 };
+    const endM   = { id: uid(), time: duration, label: 'Ende',  active: true,  pin: 'end', listOrder: 1 };
+    markers.push(startM, endM);
+    reindexListOrder();
+    // Sicherheitshalber konsistent halten
+    markers.sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
+    if (typeof renderMarkerList === 'function') renderMarkerList();
+    if (typeof draw === 'function') draw();
+    // Loop/Engine aktualisieren, falls aktiv
+    if (typeof resumeWithUpdatedLoopPreservingPhase === 'function' && typeof usingEngine !== 'undefined' && usingEngine) {
+      resumeWithUpdatedLoopPreservingPhase();
+    }
+  }
+}
+
+
+    function setActiveLine(idx){
+      const rows = lyricsListEl.querySelectorAll('.lyricsRow');
+      if(rows.length===0){ lastActiveLine = -1; return; }
+      idx = Number.isFinite(idx) ? idx : -1;
+      idx = (idx>=0 && idx<rows.length) ? idx : -1;
+      if(lastActiveLine>=0 && rows[lastActiveLine]) rows[lastActiveLine].classList.remove('active');
+      if(idx>=0 && rows[idx]) rows[idx].classList.add('active');
+      lastActiveLine = idx;
+      if(idx>=0 && book.classList.contains('flipped') && autoScrollEnabled){
+        rows[idx].scrollIntoView({ block:'center', behavior:'smooth' });
+      }
+    }
+
+    function updateLyricsHighlight(t){
+      const { lines } = computeCounts();
+      if(lines<=0){ setActiveLine(-1); return; }
+      const bl = barLen();
+      if(!isFinite(bl) || bl<=0){ setActiveLine(-1); return; }
+      const barIdx = Math.floor((t + EPS) / bl);
+      const lineIdx = Math.floor(barIdx / 2);
+      if(lineIdx !== lastActiveLine) setActiveLine(lineIdx);
+    }
+
+    // --- Zeichnen ---
+    function pickTimeStep(viewSpan){
+      const steps=[0.1,0.2,0.5,1,2,5,10,15,30,60,120,300,600,900,1800,3600,7200];
+      for(const st of steps){ if(viewSpan/st<=10) return st; }
+      return steps.at(-1);
+    }
+
+    function draw(){
+      const dpr = window.devicePixelRatio||1;
+      const cssW = wave.clientWidth || 340, cssH = 240;
+      wave.width = Math.floor(cssW*dpr); wave.height = Math.floor(cssH*dpr);
+      const ctx = wave.getContext('2d');
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.clearRect(0,0,cssW,cssH);
+      renderHit.clear();
+
+      const LABEL_MARGIN = 12, LABEL_H = 16;
+      const topLabelY = LABEL_MARGIN;
+      const bottomLabelY = cssH - LABEL_MARGIN - LABEL_H;
+      const waveTop = FRAME_PAD, waveBottom = cssH - FRAME_PAD;
+      const waveHeight = waveBottom - waveTop;
+      const mid = waveTop + waveHeight/2;
+
+      ctx.fillStyle='#0c1423'; ctx.fillRect(0,0,cssW,cssH);
+      ctx.strokeStyle='#0b1220'; ctx.strokeRect(0.5,0.5,cssW-1,cssH-1);
+
+      // Quick-Loop-Füllung (hat Vorrang)
+      try{
+        const lr = getLoopRegion();
+        if(lr.mode === 'quick'){
+          const left  = Math.max(0, Math.min(cssW, timeToX(lr.s, cssW)));
+          const right = Math.max(0, Math.min(cssW, timeToX(lr.e, cssW)));
+          if(right > left){
+            ctx.fillStyle='rgba(239,68,68,0.22)';
+            ctx.fillRect(left, waveTop, right-left, waveBottom - waveTop);
+          }
+        }
+      }catch(e){ /* noop */ }
+
+
+      // Waveform
+      if(audioBuffer){
+        const ch = audioBuffer.getChannelData(0);
+        sampleRate = audioBuffer.sampleRate || sampleRate;
+        const startSample = Math.floor(Math.max(0, viewStart) * sampleRate);
+        const endSample = Math.min(ch.length, Math.ceil(viewEnd() * sampleRate));
+        const samplesVisible = Math.max(1, endSample - startSample);
+        const sppx = Math.max(1, Math.floor(samplesVisible / cssW));
+        ctx.strokeStyle = '#64748b';
+        ctx.beginPath();
+        for(let x=0;x<cssW;x++){
+          const s0 = startSample + x * sppx;
+          let min = 1, max = -1;
+          for(let i=0;i<sppx && (s0+i)<endSample;i++){
+            const v = ch[s0+i]||0; if(v<min) min=v; if(v>max) max=v;
+          }
+          ctx.moveTo(x, mid + min*(waveHeight/2-10));
+          ctx.lineTo(x, mid + max*(waveHeight/2-10));
+        }
+        ctx.stroke();
+      }
+
+      // Zeitachse (unten)
+      if(duration>0 && viewDur>0){
+        const step=pickTimeStep(viewDur);
+        const minor=step/5;
+        const startMajor = Math.ceil(viewStart/step)*step;
+        const startMinor = Math.ceil(viewStart/minor)*minor;
+
+        ctx.strokeStyle='rgba(255,255,255,0.10)';
+        for(let t=startMinor; t<=viewEnd()+EPS; t+=minor){
+          if(Math.abs((t/step) - Math.round(t/step)) < 1e-6) continue;
+          const x = timeToX(t, cssW);
+          ctx.beginPath(); ctx.moveTo(x, waveBottom-8); ctx.lineTo(x, waveBottom-3); ctx.stroke();
+        }
+
+        ctx.strokeStyle='rgba(255,255,255,0.20)';
+        ctx.fillStyle='rgba(203,213,225,0.95)';
+        ctx.font='11px ui-monospace, SFMono-Regular, Menlo, monospace';
+        for(let t=startMajor; t<=viewEnd()+EPS; t+=step){
+          const x = timeToX(t, cssW);
+          ctx.beginPath(); ctx.moveTo(x, waveBottom-14); ctx.lineTo(x, waveBottom-3); ctx.stroke();
+          const lbl = shortTimeLabel(t);
+          const w = ctx.measureText(lbl).width;
+          const tx = Math.min(Math.max(x - w/2, 2), cssW - w - 2);
+          ctx.fillText(lbl, tx, waveBottom - 16);
+        }
+      }
+
+      // Raster (2-Takt-Linien, Snap)
+      const stepGrid = gridStep();
+      if(duration>0 && stepGrid>0){
+        ctx.strokeStyle='rgba(96,165,250,0.25)';
+        const t0 = Math.ceil((viewStart - EPS) / stepGrid) * stepGrid;
+        for(let t=t0; t<=viewEnd()+EPS; t+=stepGrid){
+          const x = timeToX(t, cssW);
+          ctx.beginPath(); ctx.moveTo(x, waveTop); ctx.lineTo(x, waveBottom); ctx.stroke();
+        }
+      }
+
+      // Loop-Füllung
+      const act = getActiveMarkersSorted();
+      if(act.length===2){
+        const s=Math.min(act[0].time,act[1].time), e=Math.max(act[0].time,act[1].time);
+        const left = Math.max(0, Math.min(cssW, timeToX(s, cssW)));
+        const right = Math.max(0, Math.min(cssW, timeToX(e, cssW)));
+        if(right>left){
+          ctx.fillStyle='rgba(37,99,235,0.18)';
+          ctx.fillRect(left, waveTop, right-left, waveBottom - waveTop);
+        }
+      }
+
+      // Marker + Beschriftungen
+      if(markers.length>0 && duration>0){
+        ctx.font='11px ui-monospace, SFMono-Regular, Menlo, monospace';
+        const sorted=markers.slice().sort((a,b)=>a.time-b.time);
+        const visible=sorted.filter(m=>m.time>=viewStart-EPS && m.time<=viewEnd()+EPS);
+        visible.forEach(m=>{
+          const idx=sorted.findIndex(mm=>mm.id===m.id);
+          const labelTop=(idx%2===0);
+          const x=timeToX(m.time, cssW);
+          const color = m.active ? 'rgba(239,68,68,0.95)' : 'rgba(96,165,250,0.95)';
+          ctx.strokeStyle=color; ctx.beginPath(); ctx.moveTo(x, waveTop); ctx.lineTo(x, waveBottom); ctx.stroke();
+
+          const txt=(m.label||'').slice(0,80);
+          const pad=3, h=16, w=ctx.measureText(txt).width+pad*2;
+          const lx=Math.min(Math.max(x-w/2,2), cssW-w-2);
+          const ly=labelTop?12:(cssH-12-16);
+          ctx.fillStyle='rgba(2,6,23,0.9)'; ctx.fillRect(lx,ly,w,h);
+          ctx.strokeStyle=color; ctx.strokeRect(lx,ly,w,h);
+          ctx.fillStyle='#e2e8f0'; ctx.fillText(txt, lx+pad, ly+12);
+          ctx.strokeStyle=color; ctx.beginPath();
+          if(labelTop){ ctx.moveTo(x, ly+h); ctx.lineTo(x, waveTop); } else { ctx.moveTo(x, ly); ctx.lineTo(x, waveBottom); }
+          ctx.stroke();
+          renderHit.set(m.id, { x, labelRect:{x:lx,y:ly,w,h} });
+        });
+      }
+
+      // Cursor
+      const cx = timeToX(cursorTime, cssW);
+      if(cx>=0 && cx<=cssW){
+        ctx.fillStyle='rgba(255,255,255,0.7)';
+        ctx.fillRect(cx, waveTop, 2, waveBottom - waveTop);
+        const handleY = waveTop - 12;
+        ctx.beginPath(); ctx.arc(cx, handleY, 7, 0, Math.PI*2);
+        ctx.fillStyle='#e2e8f0'; ctx.fill();
+        ctx.beginPath(); ctx.moveTo(cx, handleY+6); ctx.lineTo(cx-6, handleY+12); ctx.lineTo(cx+6, handleY+12); ctx.closePath();
+        ctx.fillStyle = '#e2e8f0'; ctx.fill();
+      }
+
+      // Auch im Pause-/Scrub-Zustand Zeilen-Highlight aktualisieren
+      updateLyricsHighlight(cursorTime);
+    }
+
+    // --- Cursor setzen (Snap bleibt) ---
+    function setCursor(t, snapIt=true){
+      const step = gridStep();
+      const target = snapIt ? Math.round(t/step)*step : t;
+      cursorTime = clamp(target, 0, duration||0);
+      curLabel.textContent = formatTime(cursorTime);
+    }
+
+    // --- Interaktion (Drag Cursor / Pan / Pinch) + Marker UI ---
+    function hitMarkerLabel(ev){
+      const rect = wave.getBoundingClientRect();
+      const px = ev.clientX - rect.left, py = ev.clientY - rect.top;
+      for(const m of markers){
+        const hit = renderHit.get(m.id); if(!hit) continue;
+        const r = hit.labelRect;
+        if(px>=r.x && px<=r.x+r.w && py>=r.y && py<=r.y+r.h) return m;
+      }
+      return null;
+    }
+
+    wave.addEventListener('pointerdown', (ev)=>{
+      if(duration<=0) return;
+      wave.setPointerCapture(ev.pointerId);
+      activePointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+      // Tap-Kandidat vormerken
+      downX = ev.clientX; downY = ev.clientY; tapCandidate = true;
+      tapOnMarkerLabel = false;
+
+      const rect=wave.getBoundingClientRect();
+      const x=clamp(ev.clientX-rect.left,0,rect.width);
+      const y=clamp(ev.clientY-rect.top,0,rect.height);
+      const cx=timeToX(cursorTime, rect.width);
+      const overHandle=(Math.abs(x-cx)<=14) && (y<=FRAME_PAD);
+
+      if(activePointers.size===2){
+        const pts=[...activePointers.values()];
+        const dx=pts[1].x-pts[0].x, dy=pts[1].y-pts[0].y;
+        pinchStartDist=Math.hypot(dx,dy); pinchStartViewDur=viewDur;
+        const midX=(pts[0].x+pts[1].x)/2-rect.left; pinchCenterTime=xToTime(midX,rect.width);
+        draggingCursor=false; draggingPan=false; clearTimeout(longTimer); longTimer=null; draggingMarkerId=null;
+        return;
+      }
+
+      const m=hitMarkerLabel(ev);
+      if(m){
+        tapOnMarkerLabel = true;
+        const startX=ev.clientX;
+        longTimer=setTimeout(()=>{ draggingMarkerId=m.id; },300);
+        const now=Date.now();
+        const isDouble=(lastTapId===m.id && tapTimer && (now - tapTimer.time) < 300);
+        if(isDouble){
+          clearTimeout(tapTimer.handle); tapTimer=null; lastTapId=null;
+          const name=prompt('Neuer Markername:', m.label||''); if(name!==null){ m.label=name; renderMarkerList(); draw(); }
+        }else{
+          tapTimer={ time:now, handle:setTimeout(()=>{
+            m.active=!m.active; if(m.active) ensureMaxTwoActive(m);
+            const act=markers.filter(x=>x.active).sort((a,b)=>a.time-b.time);
+            if(act.length>2){ for(let i=2;i<act.length;i++) act[i].active=false; }
+            renderMarkerList(); draw();
+            if(usingEngine) resumeWithUpdatedLoopPreservingPhase();
+            tapTimer=null; lastTapId=null;
+          },320) }; lastTapId=m.id;
+        }
+
+        function onMove(e){
+          if(draggingMarkerId===m.id){
+            const rect=wave.getBoundingClientRect();
+            const xx=clamp(e.clientX-rect.left,0,rect.width);
+            const t=xToTime(xx,rect.width);
+            m.time=clamp(snapToGrid(t),0,duration);
+            markers.sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
+            renderMarkerList(); draw();
+            if(usingEngine && m.active) resumeWithUpdatedLoopPreservingPhase();
+          }else{
+            if(Math.abs(e.clientX-startX)>8){ clearTimeout(longTimer); longTimer=null; }
+          }
+        }
+        function onUp(e){
+          clearTimeout(longTimer); longTimer=null;
+          if(draggingMarkerId===m.id){ draggingMarkerId=null; if(usingEngine) resumeWithUpdatedLoopPreservingPhase(); }
+          wave.removeEventListener('pointermove', onMove);
+          wave.removeEventListener('pointerup', onUp);
+          wave.releasePointerCapture?.(e.pointerId);
+        }
+        wave.addEventListener('pointermove', onMove);
+        wave.addEventListener('pointerup', onUp);
+        return;
+      }
+
+      if(overHandle){ draggingCursor=true; draggingPan=false; clearTimeout(longTimer); longTimer=null; draggingMarkerId=null; return; }
+
+      draggingPan=true; draggingCursor=false; clearTimeout(longTimer); longTimer=null; draggingMarkerId=null;
+      panStartX=ev.clientX; panStartViewStart=viewStart;
+    });
+
+    wave.addEventListener('pointermove', (ev)=>{
+      if(!activePointers.has(ev.pointerId)) return;
+      activePointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+      const rect=wave.getBoundingClientRect();
+
+      if(activePointers.size===1){
+        if(draggingCursor){
+          const x=clamp(ev.clientX-rect.left,0,rect.width);
+          const t=xToTime(x,rect.width);
+          setCursor(t,true);
+          if(usingEngine) restartEngineAt(cursorTime);
+          draw();
+        } else if(draggingPan){
+          const dx=ev.clientX-panStartX;
+          const dt=(dx/rect.width)*viewDur;
+          const newStart=clamp(panStartViewStart - dt, 0, Math.max(0, duration - viewDur));
+          setView(newStart, viewDur);
+          draw();
+        }
+      } else if(activePointers.size===2){
+        const pts=[...activePointers.values()];
+        const dx=pts[1].x-pts[0].x, dy=pts[1].y-pts[0].y;
+        const dist=Math.hypot(dx,dy);
+        const scale=(pinchStartDist>0)?(dist/pinchStartDist):1;
+        let newDur=clamp(pinchStartViewDur/scale, Math.min(gridStep()/4, duration||1), duration||1);
+        const midX=(pts[0].x+pts[1].x)/2-rect.left;
+        const newStart=clamp(pinchCenterTime - (midX/rect.width)*newDur, 0, Math.max(0, (duration||0) - newDur));
+        setView(newStart, newDur);
+        draw();
+      }
+    });
+
+    function endPointer(ev){
+      activePointers.delete(ev.pointerId);
+      // Tap-to-seek: wenn es ein echter Tap war (kein Drag, kein Marker, kein Pan)
+      if(activePointers.size===0){
+        const rect = wave.getBoundingClientRect();
+        const upX = clamp(ev.clientX - rect.left, 0, rect.width);
+        const upY = clamp(ev.clientY - rect.top, 0, rect.height);
+        const isInWaveform = (upY >= FRAME_PAD) && (upY <= rect.height - FRAME_PAD);
+        const maySeek = tapCandidate && !draggingCursor && !draggingMarkerId && !tapOnMarkerLabel && !isInWaveform;
+        if(maySeek){
+          const t = xToTime(upX, rect.width);
+          setCursor(t, true);
+          if(usingEngine) restartEngineAt(cursorTime);
+          draw();
+        }
+        tapCandidate = false;
+      }
+
+      if(activePointers.size===0){
+        if(draggingCursor){ setCursor(cursorTime, true); }
+        draggingCursor=false; draggingPan=false; draggingMarkerId=null; pinchStartDist=0;
+        draw();
+      }
+      wave.releasePointerCapture?.(ev.pointerId);
+    }
+    wave.addEventListener('pointerup', endPointer);
+    wave.addEventListener('pointercancel', endPointer);
+
+    // Desktop Zoom per Ctrl+Wheel
+    wave.addEventListener('wheel', (ev)=>{
+      if(duration<=0) return;
+      if(!ev.ctrlKey) return;
+      ev.preventDefault();
+      const rect=wave.getBoundingClientRect();
+      const mouseX=clamp(ev.clientX-rect.left,0,rect.width);
+      const anchorTime=xToTime(mouseX,rect.width);
+      const factor=Math.exp(-ev.deltaY*0.0015);
+      const targetDur=clamp(viewDur * (1/factor), Math.min(gridStep()/4, duration||1), duration||1);
+      const newStart=clamp(anchorTime - targetDur*((mouseX/rect.width)), 0, Math.max(0, duration - targetDur));
+      setView(newStart, targetDur); draw();
+    }, { passive:false });
+
+    // --- Projekt speichern/laden (+ Lyrics) ---
+    function currentProject(){
+      return {
+        version:20,
+        bpm: bpm(),
+        cursorTime,
+        markers: markers.map(m=>({ id:m.id, time:+m.time||0, label:m.label||'', active:!!m.active, listOrder: Number.isFinite(m.listOrder)? m.listOrder : 0 })),
+        viewStart, viewDur,
+        lyrics: Array.isArray(lyrics) ? lyrics.slice() : [],
+        relativeAudio: relativeAudioName || (loadedFileMeta ? loadedFileMeta.name : null),
+        file: loadedFileMeta || null,
+        createdAt: new Date().toISOString(),
+        playSeqOrder: !!playSeqOrder
+      };
+    }
+    function downloadJson(obj,filename){
+      const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob); const a=document.createElement('a');
+      a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1500);
+    }
+
+    saveProjectBtn?.addEventListener('click', ()=>{
+      const defaultBase = (loadedFileMeta && loadedFileMeta.name ? loadedFileMeta.name.replace(/\.[^.]+$/, '') : 'projekt');
+      let name = prompt('Dateiname für das Projekt (ohne oder mit .json):', `${defaultBase}_session`);
+      if(name===null) return;
+      name = name.trim() || 'projekt';
+      if(!/\.json$/i.test(name)) name += '.json';
+      downloadJson(currentProject(), name);
+    });
+
+    loadProjectInput?.addEventListener('change', async e=>{
+      const f=e.target.files&&e.target.files[0]; if(!f) return;
+      try{
+        const txt=await f.text(); const json=JSON.parse(txt);
+        
+        // Reihenfolge-Playback Flag laden
+        playSeqOrder = !!json.playSeqOrder;
+        if (typeof playSeqToggle !== 'undefined' && playSeqToggle) playSeqToggle.checked = playSeqOrder;
+bpmInput.value = json.bpm || 120;
+        cursorTime = +json.cursorTime || 0;
+        markers = Array.isArray(json.markers) ? json.markers.map((m,i)=>({ id:m.id||uid(), time:+m.time||0, label:m.label||'', active:!!m.active, listOrder: Number.isFinite(m.listOrder)? +m.listOrder : i })) : [];
+        markers.sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
+        const vs = Number.isFinite(json.viewStart)? +json.viewStart : 0;
+        const vd = Number.isFinite(json.viewDur) && json.viewDur>0 ? +json.viewDur : (duration||0);
+        setView(vs, vd>0?vd:(duration||0));
+
+        // Lyrics laden (werden nach Audio-Decode auf richtige Länge gebracht)
+        lyrics = Array.isArray(json.lyrics) ? json.lyrics.slice() : [];
+        renderLyricsList();
+
+        renderMarkerList(); draw();
+
+        // --- Auto-activate "Marker übernehmen" on project load ---
+        try{
+          perSegmentLineNumbering = true;
+          const blAuto = barLen();
+          if(isFinite(blAuto) && blAuto > 0){
+            const headersAuto = [];
+            (markers||[])
+              .filter(m=> (m.label||'').trim().length>0 && m.pin!=='start' && m.pin!=='end')
+              .forEach(m=>{
+                const barNumber = Math.floor((m.time + EPS) / blAuto) + 1; // 1-basiert
+                const lineIdx   = Math.floor((barNumber - 1) / 2) + 1;     // 2 Takte pro Zeile
+                headersAuto.push({ lineIdx, label: m.label.trim(), bar: barNumber });
+              });
+            headersAuto.sort((a,b)=> a.lineIdx - b.lineIdx || a.bar - b.bar);
+            markerHeaders = headersAuto;
+            if(importMarkersBtn){
+              importMarkersBtn.classList.add('active');
+              importMarkersBtn.textContent = 'Marker übernommen';
+            }
+          }else{
+            perSegmentLineNumbering = false;
+            markerHeaders = [];
+            if(importMarkersBtn){
+              importMarkersBtn.classList.remove('active');
+              importMarkersBtn.textContent = 'Marker übernehmen';
+            }
+          }
+          renderLyricsList();
+        }catch(e){ /* noop */ }
+
+
+        const expected = json.relativeAudio || (json.file && json.file.name) || '';
+        alert(expected ? `Bitte wähle jetzt die Audiodatei aus:\n\nErwartet: ${expected}\n\nDu kannst auch eine andere Datei wählen.` : 'Bitte wähle jetzt die passende Audiodatei aus.');
+        loadAudioForProject.value=''; loadAudioForProject.click();
+      }catch(err){ alert('Konnte Projekt nicht lesen: '+(err&&err.message?err.message:err)); }
+      e.target.value='';
+    });
+
+    loadAudioForProject?.addEventListener('change', async (e)=>{
+      const file=e.target.files&&e.target.files[0]; if(!file) return;
+      try{
+        const arrayBuf=await file.arrayBuffer();
+        const AC=window.AudioContext||window.webkitAudioContext; const tmp=new AC();
+        audioBuffer=await tmp.decodeAudioData(arrayBuf);
+        duration=audioBuffer.duration; sampleRate=audioBuffer.sampleRate; tmp.close();
+        if(objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl=URL.createObjectURL(file);
+        loadedFileMeta={ name:file.name, size:file.size, type:file.type||'', lastModified:file.lastModified||0 };
+        relativeAudioName=file.name;
+        fileInfo.textContent = file.name || '–';
+        if(viewDur===0){ setView(0, duration); }
+        draw();
+        // Nach dem Laden Zeilen ggf. neu erzeugen (bestehende Texte werden erhalten)
+        rebuildLyrics({ preserve:true });
+// auto-marker
+ensureDefaultStartEndMarkers();
+      }catch(err){ alert('Konnte Audiodatei nicht laden: '+(err&&err.message?err.message:err)); }
+    });
+
+    // --- Datei laden ---
+    fileInput.addEventListener('change', async e=>{
+      const file=e.target.files&&e.target.files[0]; if(!file) return;
+      if(objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl=URL.createObjectURL(file);
+      loadedFileMeta={ name:file.name, size:file.size, type:file.type||'', lastModified:file.lastModified||0 };
+      relativeAudioName=file.name;
+      fileInfo.textContent = file.name || '–';
+      audioBuffer=null; duration=0; draw();
+      try{
+        const arrayBuf=await file.arrayBuffer();
+        const AC=window.AudioContext||window.webkitAudioContext; const tmp=new AC();
+        audioBuffer=await tmp.decodeAudioData(arrayBuf);
+        duration=audioBuffer.duration; sampleRate=audioBuffer.sampleRate; tmp.close();
+        minView=Math.max(0.25, gridStep()/4);
+        setView(0, duration);
+        draw();
+        // Nach dem Laden Zeilen neu berechnen
+        rebuildLyrics({ preserve:true });
+// auto-marker
+ensureDefaultStartEndMarkers();
+      }catch(err){ console.warn('Decode fehlgeschlagen:',err); draw(); }
+    });
+
+    // --- Marker-Liste ---
+    function renderMarkerList(){
+  markerListEl.innerHTML = "";
+  ensureListOrder();
+  if(markers.length===0){
+    markerListEl.innerHTML = '<div style="color:#94a3b8;">Noch keine Marker.</div>';
+    return;
+  }
+  const ordered = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
+
+  // Delegated container-level handlers (set up once)
+  if(!markerListEl._dndBound){
+    let dragId = null;
+    let overRow = null;
+    let overPos = null; // "before" | "after"
+
+    markerListEl.addEventListener('dragstart', (e)=>{
+      const row = e.target.closest('.markerRow');
+      if(!row) return e.preventDefault();
+      // only allow dragging when starting from handle
+      if(!e.target.closest('.dragHandle')) return e.preventDefault();
+      dragId = row.dataset.id;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try{ e.dataTransfer.setData('text/plain', dragId); }catch(_){}
+    
+      // Custom drag image for better feel
+      try {
+        const ghost = row.cloneNode(true);
+        ghost.style.width = row.offsetWidth + 'px';
+        ghost.style.position = 'absolute';
+        ghost.style.top = '-9999px';
+        ghost.style.left = '-9999px';
+        ghost.style.opacity = '0.85';
+        document.body.appendChild(ghost);
+        e.dataTransfer.setDragImage(ghost, ghost.offsetWidth/2, ghost.offsetHeight/2);
+        setTimeout(()=>{ try { document.body.removeChild(ghost); } catch(_){} }, 0);
+      } catch(_){}
+    });
+
+    markerListEl.addEventListener('dragend', (e)=>{
+      const row = e.target.closest('.markerRow');
+      if(row) row.classList.remove('dragging');
+      dragId = null;
+      if(overRow){ overRow.classList.remove('drop-before','drop-after','drop-target'); overRow=null; }
+      overPos = null;
+    });
+
+    markerListEl.addEventListener('dragover', (e)=>{
+      e.preventDefault();
+      const row = e.target.closest('.markerRow');
+      if(!row) return;
+      if(overRow && overRow !== row){ overRow.classList.remove('drop-before','drop-after','drop-target'); }
+      overRow = row;
+      row.classList.add('drop-target');
+      const rect = row.getBoundingClientRect();
+      const halfway = rect.top + rect.height/2;
+      const pos = (e.clientY < halfway) ? 'after' : 'before';
+      overPos = pos;
+      row.classList.toggle('drop-before', pos==='before');
+      row.classList.toggle('drop-after',  pos==='after');
+      e.dataTransfer.dropEffect = 'move';
+    });
+
+    markerListEl.addEventListener('drop', (e)=>{
+      e.preventDefault();
+      const row = e.target.closest('.markerRow');
+      if(!row || !dragId) return;
+      const targetId = row.dataset.id;
+      const list = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
+      const from = list.findIndex(m=>m.id===dragId);
+      const toBase = list.findIndex(m=>m.id===targetId);
+      if(from<0 || toBase<0) return;
+      const to = overPos === 'before' ? toBase : toBase+1;
+      reorderById(dragId, to>from ? to-1 : to);
+      renderMarkerList();
+      draw();
+      if(usingEngine) resumeWithUpdatedLoopPreservingPhase();
+    });
+
+    
+    // --- Touch/Pen Fallback: Sortieren per Griffpunkt mit Pointer-Events ---
+    markerListEl.addEventListener('pointerdown', (e)=>{
+      const handle = e.target.closest('.dragHandle');
+      if(!handle) return;                      // nur am Griff
+      if(e.pointerType === 'mouse') return;    // Maus lässt HTML5 DnD laufen
+      e.preventDefault();
+
+      const row = handle.closest('.markerRow');
+      if(!row) return;
+
+      const dragIdLocal = row.dataset.id;
+      let overRow = null;
+      let overPos = null; // 'before' | 'after'
+
+      row.classList.add('dragging');
+
+      function onMove(ev){
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        const targetRow = el && el.closest ? el.closest('.markerRow') : null;
+
+        if(overRow && overRow !== targetRow){
+          overRow.classList.remove('drop-before','drop-after','drop-target');
+        }
+        if(targetRow && targetRow !== row){
+          const r = targetRow.getBoundingClientRect();
+          const halfway = r.top + r.height/2;
+          overPos = (ev.clientY < halfway) ? 'after' : 'before';
+          targetRow.classList.add('drop-target');
+          targetRow.classList.toggle('drop-before', overPos === 'before');
+          targetRow.classList.toggle('drop-after',  overPos === 'after');
+        }else{
+          overPos = null;
+        }
+        overRow = targetRow || null;
+      }
+
+      function onUp(){
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        row.classList.remove('dragging');
+
+        if(overRow && overPos){
+          const list = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
+          const from = list.findIndex(m=> m.id === dragIdLocal);
+          const toBase = list.findIndex(m=> m.id === overRow.dataset.id);
+          if(from >= 0 && toBase >= 0){
+            const to = (overPos === 'before') ? toBase : toBase + 1;
+            reorderById(dragIdLocal, to > from ? to - 1 : to);
+          }
+          overRow.classList.remove('drop-before','drop-after','drop-target');
+          renderMarkerList(); 
+          if (typeof draw === 'function') { try { draw(); } catch(e){} }
+          if (typeof usingEngine !== 'undefined' && usingEngine && typeof resumeWithUpdatedLoopPreservingPhase === 'function') {
+            try { resumeWithUpdatedLoopPreservingPhase(); } catch(e){}
+          }
+        }
+      }
+
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp, { once:true });
+    });
+    markerListEl._dndBound = true;
+  }
+
+  ordered.forEach((m)=>{
+    const row = document.createElement('div');
+    row.className = 'markerRow';
+    row.dataset.id = m.id;
+    row.draggable = true;
+
+    const handle = document.createElement('div');
+    handle.className = 'dragHandle';
+    handle.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round"/></svg>';
+
+    const name = document.createElement('input');
+    name.className='field'; name.type='text'; name.value=m.label||''; name.placeholder='Markername';
+    name.addEventListener('change', ()=>{ m.label=name.value; draw(); });
+
+    const jump = document.createElement('button'); jump.className='btn'; jump.textContent='Springen';
+    jump.addEventListener('click', ()=>{
+      const targetDur = viewDur>0?viewDur:duration;
+      const newStart = clamp(m.time - targetDur/2, 0, Math.max(0, duration - targetDur));
+      setView(newStart, targetDur);
+      setCursor(m.time, true);
+      if(usingEngine) restartEngineAt(m.time);
+      draw();
+    });
+
+    const toggle = document.createElement('button'); toggle.className='btn'; toggle.textContent = m.active ? 'Aktiv' : 'Inaktiv';
+    toggle.addEventListener('click', ()=>{
+      m.active=!m.active; if(m.active) ensureMaxTwoActive(m);
+      const act=markers.filter(x=>x.active).sort((a,b)=>a.time-b.time);
+      if(act.length>2){ for(let i=2;i<act.length;i++) act[i].active=false; }
+      renderMarkerList(); draw();
+      if(usingEngine) resumeWithUpdatedLoopPreservingPhase();
+    });
+
+    row.appendChild(handle);
+    row.appendChild(name);
+    row.appendChild(jump);
+    row.appendChild(toggle);
+    markerListEl.appendChild(row);
+  });
+}
+
+
+    // --- Buttons ---
+    addMarkerBtn.addEventListener('click', ()=>{
+  if(duration<=0) return alert('Bitte zuerst eine Audiodatei laden.');
+  const name = prompt('Name für den Marker:'); if(name===null) return;
+  const t = cursorTime;
+  const newM = { id: uid(), time: clamp(snapToGrid(t),0,duration), label: name, active: false };
+  insertMarkerAscending(newM);
+  renderMarkerList(); draw();
+});
+
+    deleteMarkerBtn.addEventListener('click', ()=>{
+      if(duration<=0 || markers.length===0) return;
+      // nächster Marker zum Cursor
+      let idx=-1, best=Infinity;
+      for(let i=0;i<markers.length;i++){
+        const d=Math.abs(markers[i].time - cursorTime);
+        if(d<best){ best=d; idx=i; }
+      }
+      if(idx>=0){
+        const wasActive=!!markers[idx].active;
+        markers.splice(idx,1);
+        renderMarkerList(); draw();
+        if(usingEngine && wasActive) resumeWithUpdatedLoopPreservingPhase();
+      }
+    });
+
+    playSel.addEventListener('click', async ()=>{ await ensureACResumed(); startEngineAt(cursorTime); });
+    pauseBtn.addEventListener('click', ()=>{ stopEngine(); });
+
+    clearBtn.addEventListener('click', ()=>{
+      stopEngine();
+      if(objectUrl) URL.revokeObjectURL(objectUrl); objectUrl=null;
+      fileInput.value=''; fileInfo.textContent='–'; duration=0; audioBuffer=null; viewStart=0; viewDur=0;
+      markers=[]; cursorTime=0; renderMarkerList(); draw();
+      // Editor zurücksetzen
+      lyrics = []; markerHeaders=[]; lastActiveLine = -1; renderLyricsList();
+    });
+// --- Zusatz: Marker übernehmen & Autoscroll ---
+    if(importMarkersBtn){ importMarkersBtn.addEventListener('click', ()=>{
+        perSegmentLineNumbering = !perSegmentLineNumbering;
+        if(perSegmentLineNumbering){
+          const bl = barLen();
+          if(!isFinite(bl) || bl<=0){ alert('Bitte BPM einstellen, damit Takte berechnet werden können.'); perSegmentLineNumbering=false; return; }
+          const headers = [];
+          (markers||[])
+            .filter(m=> (m.label||'').trim().length>0 && m.pin!=='start' && m.pin!=='end')
+            .forEach(m=>{
+              const barNumber = Math.floor((m.time + EPS) / bl) + 1; // 1-basiert
+              const lineIdx = Math.floor((barNumber - 1) / 2) + 1;    // 2 Takte pro Zeile, 1-basiert
+              headers.push({ lineIdx, label: m.label.trim(), bar: barNumber });
+            });
+          headers.sort((a,b)=> a.lineIdx - b.lineIdx || a.bar - b.bar);
+          markerHeaders = headers;
+          importMarkersBtn.classList.add('active');
+          importMarkersBtn.textContent = 'Marker übernommen';
+        } else {
+          markerHeaders = [];
+          importMarkersBtn.classList.remove('active');
+          importMarkersBtn.textContent = 'Marker übernehmen';
+        }
+        renderLyricsList();
+      }); }
+
+    if(toggleAutoscrollBtn){
+      toggleAutoscrollBtn.addEventListener('click', ()=>{
+        autoScrollEnabled = !autoScrollEnabled;
+        toggleAutoscrollBtn.classList.toggle('active', autoScrollEnabled);
+        toggleAutoscrollBtn.textContent = `Autoscroll: ${autoScrollEnabled ? 'An' : 'Aus'}`;
+      });
+    }
+    
+
+    // BPM-Änderungen -> Editor & Raster reagieren
+    bpmInput.addEventListener('change', ()=>{
+      // minView ggf. neu anpassen (Snap/Zoom fühlt sich so konsistent an)
+      minView=Math.max(0.25, gridStep()/4);
+      rebuildLyrics({ preserve:true });
+// auto-marker
+ensureDefaultStartEndMarkers();
+      draw();
+      if(usingEngine) resumeWithUpdatedLoopPreservingPhase();
+    });
+
+    
+    // --- Export TXT ---
+    function buildExportText(){
+      const { lines } = computeCounts();
+
+      const bl = barLen();
+      const headers = [];
+      if (isFinite(bl) && bl > 0) {
+        markers
+          .filter(m => (m.label || '').trim().length > 0)
+          .forEach(m => {
+            const barNumber = Math.floor((m.time + EPS) / bl) + 1; // 1-basiert
+            const lineIdx   = Math.floor((barNumber - 1) / 2) + 1; // 2 Takte pro Zeile
+            headers.push({ lineIdx, label: m.label.trim(), bar: barNumber });
+          });
+        headers.sort((a,b)=> a.lineIdx - b.lineIdx || a.bar - b.bar);
+      }
+
+      const headersByLine = new Map();
+      headers.forEach(h=>{
+        if(h.lineIdx>=1 && h.lineIdx<=lines){
+          if(!headersByLine.has(h.lineIdx)) headersByLine.set(h.lineIdx, []);
+          headersByLine.get(h.lineIdx).push(h.label);
+        }
+      });
+
+      const out = [];
+      for (let i=0;i<lines;i++){
+        const hs = headersByLine.get(i+1) || [];
+        hs.forEach(lbl => out.push(lbl));
+        out.push(lyrics[i] || "");
+      }
+      return out.join("\n");
+    }
+
+    function downloadText(filename, text){
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 1500);
+    }
+
+    exportTxtBtn?.addEventListener('click', ()=>{
+      const base = (loadedFileMeta && loadedFileMeta.name
+                   ? loadedFileMeta.name.replace(/\.[^.]+$/, '')
+                   : 'lyrics');
+      const filename = `${base}_lyrics.txt`;
+      const content  = buildExportText();
+      downloadText(filename, content);
+    });
+// --- Init ---
+    window.addEventListener('resize', ()=>{ draw(); });
+    ensureListOrder(); renderMarkerList(); draw();
+    renderLyricsList();
+  
+
+// ===== Reihenfolge-Playback Patch =====
+(function(){
+  // Helper
+  function markersByTime(){
+    try { return (markers||[]).slice().sort((a,b)=> (a.time||0) - (b.time||0)); } catch(_){ return []; }
+  }
+  function ensureListOrder(){ try { if(window.ensureListOrder) return window.ensureListOrder(); } catch(_){} }
+  function markersByList(){
+    try {
+      if (typeof window.ensureListOrder === 'function') window.ensureListOrder();
+      return (markers||[]).slice().sort((a,b)=> ( (a.listOrder??0) - (b.listOrder??0) ));
+    } catch(_){ return []; }
+  }
+  function getMarkerById(id){
+    try { return (markers||[]).find(m => m.id === id) || null; } catch(_){ return null; }
+  }
+  function findChronoSegmentStartIdAt(t){
+    const ts = markersByTime();
+    if(ts.length === 0) return null;
+    let idx = ts.findIndex(m => m.time > t) - 1;
+    if(idx < 0) idx = 0;
+    return ts[idx].id;
+  }
+  function segmentEndTimeForStartId(id){
+    const ts = markersByTime();
+    const i = ts.findIndex(m => m.id === id);
+    if(i < 0) return duration || 0;
+    const next = ts[i+1];
+    return next ? next.time : (duration || 0);
+  }
+  function nextIdInSequence(id){
+    const ls = markersByList();
+    const i = ls.findIndex(m => m.id === id);
+    if(i < 0) return null;
+    const nxt = ls[i+1];
+    return nxt ? nxt.id : null;
+  }
+
+  function smoothJumpTo(t){
+  try {
+    // Falls Engine nicht läuft: Cursor setzen & ggf. starten
+    if(!(typeof usingEngine !== 'undefined' && usingEngine)){
+      if(typeof setCursor === 'function') setCursor(t, true);
+      if(typeof startEngineAt === 'function') startEngineAt(t);
+      else if(typeof draw === 'function') try{ draw(); }catch(_){}
+      return;
+    }
+    if(!(ac && engineSource && masterGain)){
+      if(typeof setCursor === 'function') setCursor(t, true);
+      if(typeof startEngineAt === 'function') startEngineAt(t);
+      return;
+    }
+
+    const now  = ac.currentTime;
+    const JUMP_LEAD   = 0.030; // 30ms voraus planen
+    const FADE_OUT_MS = 0.025; // 25ms Fade-Out (alt)
+    const FADE_IN_MS  = 0.025; // 25ms Fade-In (neu)
+    const when = now + JUMP_LEAD;
+
+    // Altes Signal ausblenden und stop zeitgenau planen
+    try{
+      if (engineGain && engineGain.gain){
+        engineGain.gain.cancelScheduledValues(now);
+        engineGain.gain.setValueAtTime(engineGain.gain.value, now);
+        engineGain.gain.linearRampToValueAtTime(0, when);
+      }
+      if (engineSource && typeof engineSource.stop === 'function'){
+        try { engineSource.stop(when + 0.002); } catch(_){}
+      }
+    }catch(_){}
+
+    // Neuen Source/Gain aufbauen, start & Fade-In planen
+    const src = ac.createBufferSource();
+    src.buffer = audioBuffer;
+    src.loop = false;
+    src.loopStart = 0;
+    src.loopEnd   = duration || 0;
+
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(1, when + FADE_IN_MS);
+
+    src.connect(g); g.connect(masterGain);
+
+    // State aktualisieren vor Start
+    engineSource = src;
+    engineGain   = g;
+
+    const startAt = clamp(t, 0, duration || 0);
+    engineStartCtxTime = when;
+    engineStartOffset  = startAt;
+
+    src.start(when, startAt);
+    usingEngine = true;
+
+    try{ if (typeof __setSeqGuard === 'function') __setSeqGuard(320); }catch(_){}
+
+  } catch(_){}
+}
+
+  // UI initial state
+  try {
+    if (typeof playSeqToggle !== 'undefined' && playSeqToggle) {
+      playSeqToggle.checked = !!playSeqOrder;
+      playSeqToggle.addEventListener('change', ()=>{
+        playSeqOrder = !!playSeqToggle.checked;
+        if (playSeqOrder){
+          try{ if(typeof clearQuickLoop === 'function') clearQuickLoop(); }catch(_){}
+          try{ (markers||[]).forEach(m=> m.active = false); }catch(_){}
+          try{ if(typeof renderMarkerList === 'function') renderMarkerList(); }catch(_){}
+        }
+        try{
+          if (typeof usingEngine !== 'undefined' && usingEngine && typeof getPlayheadTime === 'function' && typeof startEngineAt === 'function'){
+            startEngineAt(getPlayheadTime());
+          try{ if(playSeqOrder && engineSource){ engineSource.loop=false; engineSource.loopStart=0; engineSource.loopEnd=(duration||0); } }catch(_){}
+          }
+        }catch(_){}
+        try{ if(seqInfo) seqInfo.style.opacity = playSeqOrder ? '1' : '.65'; }catch(_){}
+        try{ seqCurrentStartId = null; }catch(_){}
+      });
+    }
+  } catch(_){}
+
+  // Override getLoopRegion to ignore loops when sequence flag is ON
+  try {
+    const __orig_getLoopRegion = window.getLoopRegion;
+    if (typeof __orig_getLoopRegion === 'function') {
+      window.getLoopRegion = function(){
+        try{
+          if (playSeqOrder) return { s:0, e: duration, mode:'full' };
+        }catch(_){}
+        return __orig_getLoopRegion();
+      };
+    }
+  } catch(_){}
+
+  // Post-process renderMarkerList to disable marker loop toggles
+  try {
+    const __orig_renderMarkerList = window.renderMarkerList;
+    if (typeof __orig_renderMarkerList === 'function') {
+      window.renderMarkerList = function(){
+        __orig_renderMarkerList();
+        try{
+          const rows = document.querySelectorAll('#markerList .markerRow');
+          rows.forEach(row => {
+            const btn = row.querySelector('button:last-of-type');
+            if(btn){
+              btn.disabled = !!playSeqOrder;
+              btn.title = playSeqOrder ? 'Ignoriert – Reihenfolge-Playback aktiv' : '';
+            }
+          });
+        }catch(_){}
+      };
+    }
+  } catch(_){}
+
+  // RAF monitor for sequence jumps; wrap startEngineAt/stopEngine
+  (function(){
+    let __seqRaf = 0;
+    function __seqMonitor(){
+      try{
+        if(!(typeof usingEngine !== 'undefined' && usingEngine && playSeqOrder && (duration||0) > 0 && (markers||[]).length > 0)){
+          __seqRaf = 0;
+          return;
+        }
+        const t = (typeof getPlayheadTime === 'function') ? getPlayheadTime() : 0;
+        if (!seqCurrentStartId) seqCurrentStartId = findChronoSegmentStartIdAt(t);
+        const segEnd = segmentEndTimeForStartId(seqCurrentStartId);
+        if (t >= segEnd - 0.02){
+          const nxtId = nextIdInSequence(seqCurrentStartId);
+          if (nxtId){
+            const nxt = getMarkerById(nxtId);
+            if (nxt){
+              smoothJumpTo(nxt.time);
+              seqCurrentStartId = nxtId;
+            }
+          } else {
+            try{ if(typeof stopEngine === 'function') __orig_stopEngine(); }catch(_){}
+            __seqRaf = 0;
+            return;
+          }
+        }
+        __seqRaf = requestAnimationFrame(__seqMonitor);
+
+        // Enforce no-loop when sequence mode is active
+        try{
+          if (playSeqOrder && typeof engineSource !== 'undefined' && engineSource){
+            engineSource.loop = false;
+            try{ engineSource.loopStart = 0; }catch(_){}
+            try{ engineSource.loopEnd   = (typeof duration !== 'undefined' ? (duration||0) : 0); }catch(_){}
+          }
+        }catch(_){}
+
+      }catch(_){ __seqRaf = requestAnimationFrame(__seqMonitor);
+
+        // Enforce no-loop when sequence mode is active
+        try{
+          if (playSeqOrder && typeof engineSource !== 'undefined' && engineSource){
+            engineSource.loop = false;
+            try{ engineSource.loopStart = 0; }catch(_){}
+            try{ engineSource.loopEnd   = (typeof duration !== 'undefined' ? (duration||0) : 0); }catch(_){}
+          }
+        }catch(_){}
+ }
+    }
+
+    const __orig_startEngineAt = window.startEngineAt;
+    const __orig_stopEngine = window.stopEngine;
+
+    if (typeof __orig_startEngineAt === 'function'){
+      window.startEngineAt = function(t){
+        __orig_startEngineAt(t);
+        try{
+          if (playSeqOrder){
+            if(__seqRaf) cancelAnimationFrame(__seqRaf);
+            seqCurrentStartId = findChronoSegmentStartIdAt(
+              (typeof getPlayheadTime === 'function') ? getPlayheadTime() : (t||0)
+            );
+            __seqRaf = requestAnimationFrame(__seqMonitor);
+
+        // Enforce no-loop when sequence mode is active
+        try{
+          if (playSeqOrder && typeof engineSource !== 'undefined' && engineSource){
+            engineSource.loop = false;
+            try{ engineSource.loopStart = 0; }catch(_){}
+            try{ engineSource.loopEnd   = (typeof duration !== 'undefined' ? (duration||0) : 0); }catch(_){}
+          }
+        }catch(_){}
+
+          }
+        }catch(_){}
+      };
+    }
+
+    if (typeof __orig_stopEngine === 'function'){
+      window.stopEngine = function(){
+        try{ if(__seqRaf){ cancelAnimationFrame(__seqRaf); __seqRaf=0; } }catch(_){}
+        __orig_stopEngine();
+      };
+    }
+  })();
+})();
+
+  // Make sure loop stays off if external code tries to 'resume' engine while sequence mode is on
+  try {
+    const __orig_resume = window.resumeWithUpdatedLoopPreservingPhase;
+    if (typeof __orig_resume === 'function'){
+      window.resumeWithUpdatedLoopPreservingPhase = function(){
+        __orig_resume();
+        try{
+          if (playSeqOrder && typeof engineSource !== 'undefined' && engineSource){
+            engineSource.loop = false;
+            try{ engineSource.loopStart = 0; }catch(_){}
+            try{ engineSource.loopEnd   = (typeof duration !== 'undefined' ? (duration||0) : 0); }catch(_){}
+          }
+        }catch(_){}
+      };
+    }
+  } catch(_){}
+// ===== Ende Reihenfolge-Playback Patch =====
+
+</script>
+<!-- ===== Loop-Fix Patch (ensure loops work when Playlist aus) ===== -->
+<script>
+(function(){
+  function enforceLoopFromRegion(){
+    try{
+      if (typeof engineSource === 'undefined' || !engineSource) return;
+      const reg = (typeof getLoopRegion === 'function') ? getLoopRegion() : {s:0,e:(typeof duration!=='undefined'?duration:0),mode:'full'};
+      const looping = (reg.mode === 'markers' || reg.mode === 'quick');
+      try { engineSource.loop = looping; } catch(_){}
+      try { engineSource.loopStart = looping ? reg.s : 0; } catch(_){}
+      try { engineSource.loopEnd   = looping ? (reg.e>0 ? reg.e : (typeof duration!=='undefined'?duration:0)) : (typeof duration!=='undefined'?duration:0); } catch(_){}
+    }catch(_){}
+  }
+
+  // Wrap startEngineAt to enforce loop state when Playlist AUS
+  try{
+    const __prev_start = window.startEngineAt;
+    if (typeof __prev_start === 'function'){
+      window.startEngineAt = function(t){
+        __prev_start(t);
+        try{ if(!window.playSeqOrder) enforceLoopFromRegion(); }catch(_){}
+      };
+    }
+  }catch(_){}
+
+  // Wrap resumeWithUpdatedLoopPreservingPhase to enforce loop state when Playlist AUS
+  try{
+    const __prev_resume = window.resumeWithUpdatedLoopPreservingPhase;
+    if (typeof __prev_resume === 'function'){
+      window.resumeWithUpdatedLoopPreservingPhase = function(){
+        __prev_resume();
+        try{ if(!window.playSeqOrder) enforceLoopFromRegion(); }catch(_){}
+      };
+    }
+  }catch(_){}
+
+  // When the playlist toggle is turned OFF, re-apply loops immediately
+  try{
+    if (typeof playSeqToggle !== 'undefined' && playSeqToggle){
+      playSeqToggle.addEventListener('change', ()=>{
+        try{ if(!window.playSeqOrder) enforceLoopFromRegion(); }catch(_){}
+      });
+    }
+  }catch(_){}
+})();
+</script>
+<!-- ===== Ende Loop-Fix Patch ===== -->
+
+<!-- ===== Playlist-Dominanz & Jump-Guard Patch ===== -->
+<script>
+(function(){
+  // Guard to prevent "phase-preserving resume" or loop code from undoing a sequence jump
+  let __seqGuardUntil = 0;
+  function __now(){ try { return performance.now(); } catch(_){ return Date.now(); } }
+  function __setSeqGuard(ms){
+    __seqGuardUntil = __now() + (ms||250);
+  }
+  window.__setSeqGuard = __setSeqGuard;
+
+  function __withinGuard(){ return __now() < __seqGuardUntil; }
+
+  // Wrap startEngineAt to establish guard and ensure loop is off when playlist is ON
+  try{
+    const __orig_start = window.startEngineAt;
+    if (typeof __orig_start === 'function'){
+      window.startEngineAt = function(t){
+        if (window.playSeqOrder) __setSeqGuard(260);
+        const r = __orig_start(t);
+        try{
+          if (window.playSeqOrder && window.engineSource){
+            window.engineSource.loop = false;
+          }
+        }catch(_){}
+        return r;
+      };
+    }
+  }catch(_){}
+
+  // If any code tries to "resume with phase" => neutralize while playlist ON
+  try{
+    const __orig_resume = window.resumeWithUpdatedLoopPreservingPhase;
+    if (typeof __orig_resume === 'function'){
+      window.resumeWithUpdatedLoopPreservingPhase = function(){
+        if (window.playSeqOrder){
+          try{
+            const t = (typeof getPlayheadTime === 'function') ? getPlayheadTime() : 0;
+            __setSeqGuard(280);
+            return startEngineAt(t);
+          }catch(_){ return; }
+        }
+        return __orig_resume();
+      };
+    }
+  }catch(_){}
+
+  // Generic wrappers for commonly used loop/apply helpers: no engine restarts while playlist ON
+  ['applyLoopAndResume','applyLoop','updateLoopAndResume','applyQuickLoop','applyMarkerLoop'].forEach(fn=>{
+    try{
+      const __orig = window[fn];
+      if (typeof __orig === 'function'){
+        window[fn] = function(){
+          if (window.playSeqOrder) {
+            // Update UI state but don't restart engine
+            try { return; } catch(_){ return; }
+          }
+          return __orig.apply(this, arguments);
+        };
+      }
+    }catch(_){}
+  });
+
+  // Safety: during guard window, repeatedly ensure loop is off
+  (function antiReassert(){
+    try{
+      if (window.playSeqOrder && __withinGuard() && window.engineSource){
+        window.engineSource.loop = false;
+      }
+    }catch(_){}
+    requestAnimationFrame(antiReassert);
+  })();
+
+  // If smoothJumpTo exists globally, wrap to set guard explicitly
+  try{
+    const __orig_smoothJumpTo = window.smoothJumpTo;
+    if (typeof __orig_smoothJumpTo === 'function'){
+      window.smoothJumpTo = function(t){
+        if (window.playSeqOrder) __setSeqGuard(300);
+        return __orig_smoothJumpTo(t);
+      };
+    }
+  }catch(_){}
+})();
+</script>
+<!-- ===== Ende Playlist-Dominanz & Jump-Guard Patch ===== -->
+</body>
+</html>
