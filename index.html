@@ -19,7 +19,8 @@
   min-height:100vh;
   perspective: 1800px;
   overflow:hidden; /* verhindert, dass 3D-Flip hinausragt */
-}
+
+  transform-style: preserve-3d;}
 .book{
   position:relative;
   width:100%;
@@ -36,9 +37,18 @@
   overflow:auto;           /* Seite darf scrollen */
   padding:20px;            /* war vorher body padding */
   will-change: transform;  /* sanftere Animationen */
-}
+
+  -webkit-backface-visibility: hidden;
+  -moz-backface-visibility: hidden;
+  transform-style: preserve-3d;}
 .page.left{  transform: rotateY(0deg) translateZ(1px); }
-.page.right{ transform: rotateY(180deg); }
+.page.right{ transform: rotateY(180deg)  translateZ(1px); }
+/* Paint order to avoid backface showing in Firefox */
+.book:not(.flipped) .page.left  { z-index: 2; }
+.book:not(.flipped) .page.right { z-index: 1; }
+.book.flipped .page.left        { z-index: 1; }
+.book.flipped .page.right       { z-index: 2; }
+
 
 /* dezente Buchkante/Schimmer */
 .book::before{
