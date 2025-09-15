@@ -229,6 +229,10 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
   box-shadow: 0 0 0 3px rgba(239,68,68,.18) inset;
 }
 
+
+  /* === Custom seq-reps styles === */
+  .markerRow .seq-reps .mono { font-weight:700; }
+
 </style>
 </head>
 <body>  <!-- Floating Flip-Pfeile -->  <button id="toRight" class="flip-arrow right" aria-label="Zur rechten Seite wechseln" title="Zur rechten Seite wechseln">
@@ -299,6 +303,14 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
       <div style="text-align:center">
         <span class="under-time mono">Cursor: <span id="curLabel">0:00.000</span></span>
       </div>
+      <div style="text-align:center; margin-top:8px;">
+        <label for="timeSig" class="label" style="margin-right:6px;">Taktart</label>
+        <select id="timeSig" class="field" style="display:inline-block; width:auto; padding:6px 10px;">
+          <option value="4" selected>4/4</option>
+          <option value="3">3/4</option>
+        </select>
+      </div>
+
 
       <!-- Marker setzen / entfernen -->
       <div class="v-gap"></div>
@@ -356,6 +368,13 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
       <div class="note-tools">
         <button id="toggleAutoscroll" class="btn toggle" title="Automatisches Scrollen ein/aus">Autoscroll: An</button>
         <button id="importMarkersBtn" class="btn toggle" title="Marker in Editor übernehmen">Marker übernehmen</button>
+      
+        <label class="label" style="margin-left:8px;">Reim-Popups</label>
+        <select id="rhymeMode" class="field" style="display:inline-block; width:auto; padding:8px 10px;">
+          <option value="off">Aus</option>
+          <option value="de" selected>Deutsch</option>
+          <option value="en">Englisch</option>
+        </select>
       </div>
 
       <div class="lyricsList" id="lyricsList"></div>
@@ -414,12 +433,47 @@ const wave = document.getElementById('wave');
     const curLabel = document.getElementById('curLabel');
     const ctx = wave.getContext('2d');
 
-    // --- Rechter Editor DOM ---
+    
+
+    const timeSigSelect = document.getElementById('timeSig');
+    if (timeSigSelect) {
+      timeSigSelect.addEventListener('change', ()=>{
+        const v = parseInt(timeSigSelect.value, 10);
+        beatsPerBar = (v === 3 ? 3 : 4);
+        // Update view constraints and UI
+        try {
+          minView = Math.max(0.25, gridStep()/4);
+          setView(viewStart, viewDur); // re-clamp using new min
+          // Rebuild lyrics (2 bars per line) but keep existing content
+          rebuildLyrics({ preserve: true });
+          draw();
+          if (usingEngine) resumeWithUpdatedLoopPreservingPhase();
+        } catch(_) {}
+      });
+      // Ensure initial value matches current beatsPerBar
+      try { timeSigSelect.value = String(beatsPerBar); } catch(_) {}
+    }
+
+// --- Rechter Editor DOM ---
     const lyricsListEl = document.getElementById('lyricsList');
     const linesInfoEl = document.getElementById('linesInfo');
     const importMarkersBtn = document.getElementById('importMarkersBtn');
     const exportTxtBtn = document.getElementById('exportTxtBtn');
     const toggleAutoscrollBtn = document.getElementById('toggleAutoscroll');
+    
+    // --- RhymeBrain Mode (off/de/en) ---
+    const rhymeModeSelect = document.getElementById('rhymeMode');
+    (function initRhymeMode(){
+      const saved = (typeof localStorage!=='undefined') ? localStorage.getItem('rhymeMode') : null;
+      const mode = (saved === 'off' || saved === 'en' || saved === 'de') ? saved : 'de';
+      window.RHYME_MODE = mode;
+      if (rhymeModeSelect) rhymeModeSelect.value = mode;
+    })();
+    rhymeModeSelect?.addEventListener('change', () => {
+      const v = rhymeModeSelect.value;
+      window.RHYME_MODE = (v === 'off' || v === 'en') ? v : 'de';
+      try { localStorage.setItem('rhymeMode', window.RHYME_MODE); } catch(_) {}
+    });
 
     // --- Tap-to-BPM ---
     const tapBpmBtn = document.getElementById('tapBpm');
@@ -468,7 +522,7 @@ const wave = document.getElementById('wave');
 
     let loadedFileMeta = null;
 
-    const BEATS_PER_BAR = 4;
+    let beatsPerBar = 4;
     const EPS = 1e-6;
 
     
@@ -530,7 +584,7 @@ const wave = document.getElementById('wave');
       return `${s}s`;
     }
     function bpm(){ const v=parseFloat(bpmInput.value); return isFinite(v)&&v>0?v:120; }
-    function barLen(){ return (60 / bpm()) * BEATS_PER_BAR; }
+    function barLen(){ return (60 / bpm()) * beatsPerBar; }
     function gridStep(){ return barLen()*2; }
     function snapToGrid(t){ const step=gridStep(); return Math.round(t/step)*step; }
     function viewEnd(){ return viewStart + viewDur; }
@@ -919,7 +973,7 @@ idx.addEventListener('pointercancel', ()=>{
 function ensureDefaultStartEndMarkers() {
   if (!Number.isFinite(duration) || duration <= 0) return;
   if (Array.isArray(markers) && markers.length === 0) {
-    const startM = { id: uid(), time: 0,        label: 'Start', active: true,  pin: 'start', listOrder: 0 };
+    const startM = { id: uid(), time: 0, label: 'Start', active: true, pin: 'start', listOrder: 0, seqReps: 1 };
     const endM   = { id: uid(), time: duration, label: 'Ende',  active: true,  pin: 'end', listOrder: 1 };
     markers.push(startM, endM);
     reindexListOrder();
@@ -1285,6 +1339,7 @@ function ensureDefaultStartEndMarkers() {
     function currentProject(){
       return {
         version:20,
+        timeSig: beatsPerBar,
         bpm: bpm(),
         cursorTime,
         markers: markers.map(m=>({ id:m.id, time:+m.time||0, label:m.label||'', active:!!m.active, listOrder: Number.isFinite(m.listOrder)? m.listOrder : 0 })),
@@ -1321,7 +1376,18 @@ function ensureDefaultStartEndMarkers() {
         playSeqOrder = !!json.playSeqOrder;
         if (typeof playSeqToggle !== 'undefined' && playSeqToggle) playSeqToggle.checked = playSeqOrder;
 bpmInput.value = json.bpm || 120;
-        cursorTime = +json.cursorTime || 0;
+        
+
+        // Load time signature (default 4/4)
+        try {
+          beatsPerBar = (json.timeSig === 3 ? 3 : 4);
+          if (typeof timeSigSelect !== 'undefined' && timeSigSelect) timeSigSelect.value = String(beatsPerBar);
+          // Update minView based on new grid and re-clamp the view
+          minView = Math.max(0.25, gridStep()/4);
+          setView(viewStart, viewDur || (duration||0));
+        } catch(_) {}
+
+cursorTime = +json.cursorTime || 0;
         markers = Array.isArray(json.markers) ? json.markers.map((m,i)=>({ id:m.id||uid(), time:+m.time||0, label:m.label||'', active:!!m.active, listOrder: Number.isFinite(m.listOrder)? +m.listOrder : i })) : [];
         markers.sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
         const vs = Number.isFinite(json.viewStart)? +json.viewStart : 0;
@@ -1388,6 +1454,8 @@ bpmInput.value = json.bpm || 120;
         draw();
         // Nach dem Laden Zeilen ggf. neu erzeugen (bestehende Texte werden erhalten)
         rebuildLyrics({ preserve:true });
+
+        try { if (timeSigSelect) timeSigSelect.value = String(beatsPerBar); } catch(_) {}
 // auto-marker
 ensureDefaultStartEndMarkers();
       }catch(err){ alert('Konnte Audiodatei nicht laden: '+(err&&err.message?err.message:err)); }
@@ -1576,29 +1644,51 @@ ensureDefaultStartEndMarkers();
     name.className='field'; name.type='text'; name.value=m.label||''; name.placeholder='Markername';
     name.addEventListener('change', ()=>{ m.label=name.value; draw(); });
 
-    const jump = document.createElement('button'); jump.className='btn'; jump.textContent='Springen';
-    jump.addEventListener('click', ()=>{
-      const targetDur = viewDur>0?viewDur:duration;
-      const newStart = clamp(m.time - targetDur/2, 0, Math.max(0, duration - targetDur));
-      setView(newStart, targetDur);
-      setCursor(m.time, true);
-      if(usingEngine) restartEngineAt(m.time);
-      draw();
+    
+    // --- Neue +/- Steuerung für Wiederholungen im Custom Arrangement ---
+    // Standardwert initialisieren
+    if (!Number.isFinite(m.seqReps)) m.seqReps = 1;
+
+    // Kompakter Zähler: [-] [n] [+]
+    const controls = document.createElement('div');
+    controls.className = 'seq-reps';
+    controls.style.display = 'flex';
+    controls.style.alignItems = 'center';
+    controls.style.gap = '6px';
+
+    const minus = document.createElement('button');
+    minus.className = 'btn';
+    minus.textContent = '-';
+    minus.title = 'Wiederholungen verringern (0 = überspringen)';
+    minus.addEventListener('click', ()=>{
+      const cur = Number.isFinite(m.seqReps) ? Math.floor(m.seqReps) : 1;
+      m.seqReps = Math.max(0, cur - 1);
+      val.textContent = String(m.seqReps);
     });
 
-    const toggle = document.createElement('button'); toggle.className='btn'; toggle.textContent = m.active ? 'Aktiv' : 'Inaktiv';
-    toggle.addEventListener('click', ()=>{
-      m.active=!m.active; if(m.active) ensureMaxTwoActive(m);
-      const act=markers.filter(x=>x.active).sort((a,b)=>a.time-b.time);
-      if(act.length>2){ for(let i=2;i<act.length;i++) act[i].active=false; }
-      renderMarkerList(); draw();
-      if(usingEngine) resumeWithUpdatedLoopPreservingPhase();
+    const val = document.createElement('div');
+    val.className = 'mono';
+    val.style.minWidth = '1.5em';
+    val.style.textAlign = 'center';
+    val.textContent = String(Number.isFinite(m.seqReps) ? Math.floor(m.seqReps) : 1);
+
+    const plus = document.createElement('button');
+    plus.className = 'btn';
+    plus.textContent = '+';
+    plus.title = 'Wiederholungen erhöhen';
+    plus.addEventListener('click', ()=>{
+      const cur = Number.isFinite(m.seqReps) ? Math.floor(m.seqReps) : 1;
+      m.seqReps = Math.max(0, cur + 1);
+      val.textContent = String(m.seqReps);
     });
+
+    controls.appendChild(minus);
+    controls.appendChild(val);
+    controls.appendChild(plus);
 
     row.appendChild(handle);
     row.appendChild(name);
-    row.appendChild(jump);
-    row.appendChild(toggle);
+    row.appendChild(controls);
     markerListEl.appendChild(row);
   });
 }
@@ -1609,7 +1699,7 @@ ensureDefaultStartEndMarkers();
   if(duration<=0) return alert('Bitte zuerst eine Audiodatei laden.');
   const name = prompt('Name für den Marker:'); if(name===null) return;
   const t = cursorTime;
-  const newM = { id: uid(), time: clamp(snapToGrid(t),0,duration), label: name, active: false };
+  const newM = { id: uid(), time: clamp(snapToGrid(t),0,duration), label: name, active: false, seqReps: 1 };
   insertMarkerAscending(newM);
   renderMarkerList(); draw();
 });
@@ -1761,19 +1851,29 @@ ensureDefaultStartEndMarkers();
   function getMarkerById(id){
     try { return (markers||[]).find(m => m.id === id) || null; } catch(_){ return null; }
   }
-  function findChronoSegmentStartIdAt(t){
+    function findChronoSegmentStartIdAt(t){
     const ts = markersByTime();
-    if(ts.length === 0) return null;
-    let idx = ts.findIndex(m => m.time > t) - 1;
-    if(idx < 0) idx = 0;
-    return ts[idx].id;
+    if (ts.length === 0) return null;
+    let idx = ts.findIndex(m => (m.time||0) > (t||0)) - 1;
+    if (idx < 0) idx = 0;
+    const startTime = (ts[idx].time||0);
+    // Prefer a user marker at the *exact same time* over the synthetic 'start' pin,
+    // so that the first real marker can carry the repeat count.
+    const sameTime = ts.filter(m => Math.abs((m.time||0) - startTime) <= (typeof EPS!=='undefined'?EPS:1e-6));
+    const preferred = sameTime.find(m => m.pin !== 'start' && m.pin !== 'end');
+    return (preferred ? preferred.id : ts[idx].id);
   }
-  function segmentEndTimeForStartId(id){
+    function segmentEndTimeForStartId(id){
     const ts = markersByTime();
     const i = ts.findIndex(m => m.id === id);
-    if(i < 0) return duration || 0;
-    const next = ts[i+1];
-    return next ? next.time : (duration || 0);
+    if (i < 0) return duration || 0;
+    const startTime = (ts[i].time||0);
+    // Find the first subsequent marker with a STRICTLY greater time,
+    // skipping any other markers that share the same timestamp.
+    let j = i + 1;
+    const eps = (typeof EPS!=='undefined'?EPS:1e-6);
+    while (j < ts.length && ((ts[j].time||0) <= startTime + eps)) j++;
+    return (j < ts.length) ? (ts[j].time||0) : (duration || 0);
   }
   function nextIdInSequence(id){
     const ls = markersByList();
@@ -1865,7 +1965,9 @@ ensureDefaultStartEndMarkers();
         }catch(_){}
         try{ if(seqInfo) seqInfo.style.opacity = playSeqOrder ? '1' : '.65'; }catch(_){}
         try{ seqCurrentStartId = null; }catch(_){}
-      });
+      
+  try{ __seqRepsLeft = 0; }catch(_){}
+});
     }
   } catch(_){}
 
@@ -1891,7 +1993,7 @@ ensureDefaultStartEndMarkers();
         try{
           const rows = document.querySelectorAll('#markerList .markerRow');
           rows.forEach(row => {
-            const btn = row.querySelector('button:last-of-type');
+            const btn = row.querySelector('button.loop-toggle');
             if(btn){
               btn.disabled = !!playSeqOrder;
               btn.title = playSeqOrder ? 'Ignoriert – Reihenfolge-Playback aktiv' : '';
@@ -1914,20 +2016,72 @@ ensureDefaultStartEndMarkers();
         const t = (typeof getPlayheadTime === 'function') ? getPlayheadTime() : 0;
         if (!seqCurrentStartId) seqCurrentStartId = findChronoSegmentStartIdAt(t);
         const segEnd = segmentEndTimeForStartId(seqCurrentStartId);
-        if (t >= segEnd - 0.02){
-          const nxtId = nextIdInSequence(seqCurrentStartId);
-          if (nxtId){
-            const nxt = getMarkerById(nxtId);
-            if (nxt){
-              smoothJumpTo(nxt.time);
-              seqCurrentStartId = nxtId;
-            }
-          } else {
-            try{ if(typeof stopEngine === 'function') __orig_stopEngine(); }catch(_){}
-            __seqRaf = 0;
-            return;
-          }
-        }
+        
+if (t >= segEnd - 0.02){
+  // Initialisiere Wiederholungszähler, falls nötig
+  if (typeof __seqRepsLeft === 'undefined') { __seqRepsLeft = 0; }
+  const curM = getMarkerById(seqCurrentStartId);
+  const segStart = curM ? (curM.time||0) : 0;
+  const segLen = Math.max(0, (segEnd - segStart));
+
+  function repsFor(id){
+    const mm = getMarkerById(id);
+    if (!mm) return 1;
+    const v = Number.isFinite(mm.seqReps) ? Math.floor(mm.seqReps) : 1;
+    return Math.max(0, v);
+  }
+  function nextPlayableId(id){
+    // finde das nächste mit reps>0 UND sinnvoller Segmentlänge
+    let guard=0;
+    let nid = id;
+    while(guard++ < 100){
+      nid = nextIdInSequence(nid);
+      if(!nid) return null;
+      const r = repsFor(nid);
+      const m2 = getMarkerById(nid);
+      const end2 = segmentEndTimeForStartId(nid);
+      const len2 = m2 ? Math.max(0, end2 - (m2.time||0)) : 0;
+      if (r > 0 && len2 > 1e-3) return nid;
+    }
+    return null;
+  }
+
+  // Erstmals setzen, wenn 0
+  if (!__seqRepsLeft || __seqRepsLeft < 0) {
+    __seqRepsLeft = repsFor(seqCurrentStartId);
+  }
+
+  // 0-Länge sofort weiterspringen
+  if (segLen <= 1e-3) {
+    const nid = nextPlayableId(seqCurrentStartId);
+    if (nid){
+      const mN = getMarkerById(nid);
+      seqCurrentStartId = nid;
+      __seqRepsLeft = repsFor(nid);
+      if (mN) smoothJumpTo(mN.time||0);
+    } else {
+      try{ if(typeof stopEngine === 'function') __orig_stopEngine(); }catch(_){}
+      __seqRaf = 0; return;
+    }
+  } else {
+    if (__seqRepsLeft > 1){
+      __seqRepsLeft -= 1;
+      smoothJumpTo(segStart); // wieder an Segmentanfang springen
+    } else {
+      const nid = nextPlayableId(seqCurrentStartId);
+      if (nid){
+        const mN = getMarkerById(nid);
+        seqCurrentStartId = nid;
+        __seqRepsLeft = repsFor(nid);
+        if (mN) smoothJumpTo(mN.time||0);
+      } else {
+        try{ if(typeof stopEngine === 'function') __orig_stopEngine(); }catch(_){}
+        __seqRaf = 0; return;
+      }
+    }
+  }
+}
+
         __seqRaf = requestAnimationFrame(__seqMonitor);
 
         // Enforce no-loop when sequence mode is active
@@ -2142,5 +2296,246 @@ ensureDefaultStartEndMarkers();
 })();
 </script>
 <!-- ===== Ende Playlist-Dominanz & Jump-Guard Patch ===== -->
+
+<script>
+/* ===== Save Patch: persist seqReps on markers ===== */
+(function(){
+  try{
+    const __orig_currentProject = window.currentProject;
+    if (typeof __orig_currentProject === 'function'){
+      window.currentProject = function(){
+        const proj = __orig_currentProject();
+        try{
+          proj.markers = (window.markers||[]).map(m => ({
+            id: m.id,
+            time: +m.time||0,
+            label: m.label||'',
+            active: !!m.active,
+            pin: m.pin || undefined,
+            listOrder: Number.isFinite(m.listOrder)? m.listOrder : 0,
+            seqReps: Number.isFinite(m.seqReps) ? Math.max(0, Math.floor(m.seqReps)) : 1
+          }));
+        }catch(_){}
+        return proj;
+      };
+    }
+  }catch(_){}
+})();
+</script>
+
+
+  <!-- === Rhyme popover for editor lines === -->
+  <div id="rhyme-popover" role="dialog" aria-live="polite" style="position: fixed; z-index: 99999; display:none; max-width: 360px; background:#0b1220; border:1px solid #334155; border-radius:12px; box-shadow:0 12px 36px rgba(0,0,0,.55); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow:hidden;">
+    <div id="rhyme-popover-header" style="padding:10px 12px; font-weight:700; border-bottom:1px solid #1f2937; color:#dbeafe;">Reime</div>
+    <div id="rhyme-popover-body" style="max-height: 280px; overflow:auto; background:#0c1423;"></div>
+    <div style="padding:8px 12px; border-top:1px solid #1f2937; font-size:12px; color:#94a3b8;">
+      Rhymes by <a href="https://rhymebrain.com" target="_blank" rel="noopener">RhymeBrain</a>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    // Scope-safe; don't rely on globals from other scripts
+    const lyricsListEl = document.getElementById('lyricsList');
+    if (!lyricsListEl) return;
+
+    const pop = document.getElementById('rhyme-popover');
+    const popHeader = document.getElementById('rhyme-popover-header');
+    const popBody = document.getElementById('rhyme-popover-body');
+
+    const cache = new Map();
+    let currentRange = null;
+
+    // Helpers
+    const isWordChar = (ch) => /\p{L}|\p{N}|['’-]/u.test(ch);
+    function expandRangeToWord(range) {
+      // Allow collapsed or small selection inside a word
+      if (!range) return null;
+      let node = range.startContainer;
+      if (node.nodeType !== Node.TEXT_NODE) {
+        if (node.childNodes && node.childNodes.length && range.startOffset > 0) {
+          node = node.childNodes[Math.max(0, range.startOffset - 1)];
+        }
+      }
+      if (node && node.nodeType !== Node.TEXT_NODE) return null;
+      const text = node.textContent;
+      if (!text) return null;
+      let i = range.startOffset, j = range.startOffset;
+      while (i > 0 && isWordChar(text[i-1])) i--;
+      while (j < text.length && isWordChar(text[j])) j++;
+      const word = text.slice(i, j);
+      if (!word || !/\p{L}/u.test(word)) return null;
+      const wordRange = document.createRange();
+      wordRange.setStart(node, i);
+      wordRange.setEnd(node, j);
+      return { word, wordRange };
+    }
+    function caretRectFromRange(wordRange) {
+      const marker = document.createElement('span');
+      marker.textContent = '\u200b';
+      wordRange.insertNode(marker);
+      const rect = marker.getBoundingClientRect();
+      marker.remove();
+      return rect;
+    }
+    function matchCaseLike(src, candidate) {
+      if (!src) return candidate;
+      if (src[0] === src[0].toUpperCase() && src.slice(1) === src.slice(1).toLowerCase()) {
+        return candidate[0]?.toUpperCase() + candidate.slice(1);
+      }
+      if (src === src.toUpperCase()) return candidate.toUpperCase();
+      return candidate;
+    }
+    function hidePopover() {
+      pop.style.display = 'none';
+      currentRange = null;
+    }
+    function placePopover(rect) {
+      const pad = 8;
+      // Measure pop after making it visible once to get size
+      pop.style.display = 'block';
+      const w = pop.offsetWidth || 240;
+      const x = Math.min(window.innerWidth - w - pad, Math.max(pad, rect.left + window.scrollX));
+      const y = rect.bottom + window.scrollY + 10;
+      pop.style.left = x + 'px';
+      pop.style.top  = y + 'px';
+    }
+
+    // Generic JSONP loader for RhymeBrain with language
+    function loadRhymes(word, lang) {
+      lang = (lang === 'en' ? 'en' : 'de');
+      const key = lang + ':' + word.toLowerCase();
+      if (cache.has(key)) return Promise.resolve(cache.get(key));
+      return new Promise((resolve, reject) => {
+        const cb = 'rb_' + Math.random().toString(36).slice(2);
+        window[cb] = (data) => {
+          try { delete window[cb]; } catch(_) {}
+          script.remove();
+          cache.set(key, data);
+          resolve(data);
+        };
+        const url = 'https://rhymebrain.com/talk?function=getRhymes'
+          + '&lang=' + lang + '&maxResults=60&word=' + encodeURIComponent(word)
+          + '&jsonp=' + cb;
+        const script = document.createElement('script');
+        script.src = url;
+        script.onerror = () => { try { delete window[cb]; } catch(_) {} reject(new Error('JSONP failed')); };
+        document.body.appendChild(script);
+      });
+    }
+    // Backwards compatible wrappers
+    function loadRhymesDE(word){ return loadRhymes(word, 'de'); }
+    function loadRhymesEN(word){ return loadRhymes(word, 'en'); }
+
+    // JSONP loader for RhymeBrain
+    function loadRhymesDE(word) {
+      const key = word.toLowerCase();
+      if (cache.has(key)) return Promise.resolve(cache.get(key));
+      return new Promise((resolve, reject) => {
+        const cb = 'rb_' + Math.random().toString(36).slice(2);
+        window[cb] = (data) => {
+          try { delete window[cb]; } catch(_) {}
+          script.remove();
+          cache.set(key, data);
+          resolve(data);
+        };
+        const url = 'https://rhymebrain.com/talk?function=getRhymes'
+          + '&lang=de&maxResults=60&word=' + encodeURIComponent(key)
+          + '&jsonp=' + cb;
+        const script = document.createElement('script');
+        script.src = url;
+        script.onerror = () => { try { delete window[cb]; } catch(_) {} reject(new Error('JSONP failed')); };
+        document.body.appendChild(script);
+      });
+    }
+
+    function renderRhymes(word, results) {
+      const perfect = results.filter(r => +r.score >= 300);
+      const near    = results.filter(r => +r.score < 300);
+
+      const pill = (w, score) =>
+        '<button type="button" class="r-pill" data-word="' + w + '" data-score="' + score + '"'
+        + ' style="margin:6px; padding:6px 10px; border:1px solid #1f2937; border-radius:999px; background:#0b1220; color:#e5e7eb; cursor:pointer;">'
+        + w + '</button>';
+
+      let html = '';
+      if (perfect.length) {
+        html += '<div style="padding:8px 10px; font-size:12px; color:#93c5fd;">Perfekte Reime</div>';
+        html += '<div style="display:flex; flex-wrap:wrap; padding:0 6px 6px 6px;">' + perfect.slice(0,24).map(r => pill(r.word, r.score)).join('') + '</div>';
+      }
+      if (near.length) {
+        html += '<div style="padding:8px 10px; font-size:12px; color:#94a3b8;">Nahe Reime</div>';
+        html += '<div style="display:flex; flex-wrap:wrap; padding:0 6px 10px 6px;">' + near.slice(0,24).map(r => pill(r.word, r.score)).join('') + '</div>';
+      }
+      if (!perfect.length && !near.length) {
+        html = '<div style="padding:12px 10px; color:#94a3b8;">Keine Vorschläge gefunden.</div>';
+      }
+      popHeader.textContent = 'Reime zu „' + word + '“';
+      popBody.innerHTML = html;
+      pop.style.display = 'block';
+    }
+
+    // Event delegation: click inside any .line within #lyricsList
+    lyricsListEl.addEventListener('mouseup', (e) => {
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) { hidePopover(); return; }
+      const range = sel.getRangeAt(0);
+      // Must be within a line
+      const lineEl = (range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+        ? range.commonAncestorContainer
+        : range.commonAncestorContainer.parentElement
+      )?.closest?.('.line');
+      if (!lineEl || !lyricsListEl.contains(lineEl)) { hidePopover(); return; }
+      if (!range.collapsed) { hidePopover(); return; } // caret click only
+
+      const expanded = expandRangeToWord(range);
+      if (!expanded) { hidePopover(); return; }
+
+      const { word, wordRange } = expanded;
+      currentRange = wordRange;
+      const rect = caretRectFromRange(wordRange);
+      popHeader.textContent = 'Lade Reime …';
+      popBody.innerHTML = '<div style="padding:12px 10px; color:#94a3b8;">Suche …</div>';
+      placePopover(rect);
+
+      (function(){
+        const mode = (window.RHYME_MODE === 'off') ? 'off' : (window.RHYME_MODE === 'en' ? 'en' : 'de');
+        if (mode === 'off') { hidePopover(); return Promise.reject('off'); }
+        return loadRhymes(word, mode).then(data => renderRhymes(word, data));
+      })()
+        .then(()=>{})
+        .catch(() => {
+          popHeader.textContent = 'Reime zu „' + word + '“';
+          popBody.innerHTML = '<div style="padding:12px 10px; color:#ef4444;">Fehler beim Laden.</div>';
+        });
+    });
+
+    // Insert rhyme on click
+    pop.addEventListener('click', (e) => {
+      const btn = e.target.closest('.r-pill');
+      if (!btn || !currentRange) return;
+      const newWord = btn.getAttribute('data-word');
+      const oldWord = currentRange.toString();
+      const replacement = matchCaseLike(oldWord, newWord);
+      const lineEl = currentRange.startContainer?.parentElement?.closest?.('.line') || null;
+      currentRange.deleteContents();
+      currentRange.insertNode(document.createTextNode(replacement));
+      if (lineEl) {
+        // ensure the model syncs if your app listens for input events
+        try { lineEl.dispatchEvent(new InputEvent('input', { bubbles: true })); } catch(_) {}
+      }
+      hidePopover();
+    });
+
+    // Close on outside click / escape / scroll / resize
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hidePopover(); });
+    document.addEventListener('mousedown', (e) => {
+      if (!pop.contains(e.target) && !e.target.closest('#lyricsList')) hidePopover();
+    }, { capture: true });
+    window.addEventListener('scroll', hidePopover, { passive: true });
+    window.addEventListener('resize', hidePopover);
+  })();
+  </script>
+    
 </body>
 </html>
