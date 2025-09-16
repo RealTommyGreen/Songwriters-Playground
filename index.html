@@ -133,6 +133,8 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
 
 .markerList{ display:grid; gap:10px; }
 .markerRow{ display:grid; grid-template-columns:28px 1fr auto auto; gap:10px; align-items:center; border:1px solid var(--muted); background:#0b1220; border-radius:12px; padding:8px; }
+
+.markerRow.muted{ opacity:.45; filter: grayscale(85%); }
 .dragHandle{ width:24px; height:24px; display:flex; align-items:center; justify-content:center; cursor:grab; user-select:none; 
   touch-action: none; /* verhindert Scroll während Touch-Drag */}
 .markerRow.dragging{ opacity:.6; }
@@ -233,6 +235,117 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
   /* === Custom seq-reps styles === */
   .markerRow .seq-reps .mono { font-weight:700; }
 
+
+  .btn.btn-sm{ padding: 6px 10px; font-size: 12px; line-height: 1.1; border-radius: 10px; }
+
+/* ---------- Floating Play/Stop Buttons (global, fixed on right) ---------- */
+.media-fab{
+  position: fixed;
+  right: 14px;
+  bottom: 18px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none; /* container transparent; buttons handle events */
+}
+.media-fab .fab{
+  pointer-events: auto;
+  width: 56px; height: 56px;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid rgba(96,165,250,.35);
+  border-radius:999px;
+  background: linear-gradient(180deg,#0b1220,#09101c);
+  box-shadow: 0 8px 30px rgba(0,0,0,.45), 0 0 0 5px rgba(59,130,246,.08);
+  cursor:pointer;
+  transition: transform .15s ease, box-shadow .2s ease, border-color .2s ease, opacity .2s ease;
+  user-select:none;
+}
+.media-fab .fab:hover{
+  border-color:#3b82f6;
+  box-shadow: 0 10px 36px rgba(0,0,0,.55), 0 0 0 6px rgba(59,130,246,.14);
+  transform: scale(1.05);
+}
+.media-fab .fab:active{ transform: scale(.98); }
+.media-fab .fab svg{ width: 28px; height: 28px; }
+.media-fab .fab.stop{ border-color: rgba(239,68,68,.45); }
+.media-fab .fab.stop:hover{ box-shadow: 0 10px 36px rgba(0,0,0,.55), 0 0 0 6px rgba(239,68,68,.14); }
+/* Hide old in-page Play/Stop buttons */
+#playSel, #pauseBtn { display: none !important; }
+
+
+/* === Editor Textzeilen: Bookman Demi, linksbündig & vertikal zentriert === */
+.page.right .lyricsRow .line{
+  font-family: "Bookman Demi","Bookman Old Style","URW Bookman L",Bookman,serif;
+  text-align: left;
+  display: flex;
+  align-items: center;
+}
+
+
+/* ===== Lightweight page switch (fade/slide) — overrides ===== */
+.scene{ perspective:none !important; transform-style:flat !important; }
+.book{ transform:none !important; }
+.page{
+  backface-visibility:visible !important;
+  -webkit-backface-visibility:visible !important;
+  transform-style:flat !important;
+  opacity:0;
+  transform: translateX(12px);
+  transition: opacity .28s ease, transform .28s ease;
+  pointer-events:none;
+}
+/* Default: show left page */
+.page.left{
+  opacity:1;
+  transform: translateX(0);
+  z-index:2;
+  pointer-events:auto;
+}
+/* Hide right by default */
+.page.right{ z-index:1; }
+/* When "flipped" (show right page) */
+.book.flipped .page.left{
+  opacity:.0;
+  transform: translateX(-12px);
+  pointer-events:none;
+}
+.book.flipped .page.right{
+  opacity:1;
+  transform: translateX(0);
+  z-index:2;
+  pointer-events:auto;
+}
+/* Keep subtle sheen but soften change */
+.book::before{
+  transition: opacity .2s ease !important;
+}
+.book.flipped::before{ opacity:.22 !important; }
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+  .page{ transition: none !important; }
+}
+/* ===== End overrides ===== */
+
+/* ===== Segment: Reim-Popups + dropdown ===== */
+.segment{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 8px;
+  border-radius:10px;
+  background: rgba(0,0,0,.04);
+  border:1px solid rgba(0,0,0,.08);
+  white-space:nowrap;
+}
+.segment .label{ margin:0 !important; }
+.segment .field{ width:auto !important; display:inline-block !important; }
+@media (max-width: 520px){
+  .segment{ display:flex; flex-wrap:wrap; white-space:normal; }
+  .segment .field{ flex:1 1 auto; min-width:160px; }
+}
+/* ===== End segment ===== */
 </style>
 </head>
 <body>  <!-- Floating Flip-Pfeile -->  <button id="toRight" class="flip-arrow right" aria-label="Zur rechten Seite wechseln" title="Zur rechten Seite wechseln">
@@ -244,7 +357,21 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M15 5l-7 7 7 7" stroke="#93c5fd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-  </button>  <div class="scene">
+  </button>
+  <!-- Floating Media Controls -->
+  <div class="media-fab" aria-label="Wiedergabesteuerung">
+    <button id="floatPlay" class="fab" title="Abspielen" aria-label="Abspielen">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M8 5v14l11-7z" fill="#93c5fd"/>
+      </svg>
+    </button>
+    <button id="floatStop" class="fab stop" title="Stop" aria-label="Stop">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="6" y="6" width="12" height="12" rx="2" fill="#fca5a5"/>
+      </svg>
+    </button>
+  </div>
+  <div class="scene">
     <div id="book" class="book">
       <!-- Linke Seite (bestehende App) -->
       <section class="page left">
@@ -299,6 +426,14 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
 
       <!-- Waveform -->
       <div class="section-gap"></div>
+
+      <!-- Trim Controls (neu) -->
+      <div id="trimControls" class="grid-3" style="margin-bottom:6px; display:flex; gap:6px; align-items:center; justify-content:flex-start;">
+  <button id="trimFront" class="btn btn-sm" title="Alles vor dem Cursor entfernen">Trim Front</button>
+  <button id="trimBack" class="btn btn-sm" title="Alles nach dem Cursor entfernen">Trim Back</button>
+  <button id="undoTrim" class="btn btn-sm" title="Letzten Schnitt rückgängig machen">Undo</button>
+  <button id="gridSnapBtn" class="btn btn-sm toggle active" title="Cursor am Raster einrasten">Grid Snap</button>
+</div>
       <canvas id="wave" height="240" aria-label="Wellenform"></canvas>
       <div style="text-align:center">
         <span class="under-time mono">Cursor: <span id="curLabel">0:00.000</span></span>
@@ -351,11 +486,10 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
       </div>
 
       <!-- Marker-Liste -->
-      <div class="v-gap"></div>
-      <div class="label" style="font-size:13px;color:#cbd5e1;">Marker</div>
+      <div style=\"height:1cm\"></div>
 
 <!-- NEU: Reihenfolge-Schalter -->
-<div id="markerSeqControls" class="card" style="padding:10px; margin-bottom:10px; display:flex; align-items:center; gap:10px;">
+<div id="markerSeqControls" class="card" style="margin-top:0; padding:10px; margin-bottom:10px; display:flex; align-items:center; gap:10px;>
   <label class="btn toggle" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
     <input id="playSeqToggle" type="checkbox" style="width:18px;height:18px; accent-color:#60a5fa; cursor:pointer;" />
     <span>Custom Arrangement</span>
@@ -377,12 +511,12 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
         <button id="toggleAutoscroll" class="btn toggle" title="Automatisches Scrollen ein/aus">Autoscroll: An</button>
         <button id="importMarkersBtn" class="btn toggle" title="Marker in Editor übernehmen">Marker übernehmen</button>
       
-        <label class="label" style="margin-left:8px;">Reim-Popups</label>
+        <div class="segment segment-reim-popups"><label class="label" style="margin-left:8px;">Reim-Popups</label>
         <select id="rhymeMode" class="field" style="display:inline-block; width:auto; padding:8px 10px;">
           <option value="off" selected>Aus</option>
           <option value="de">Deutsch</option>
           <option value="en">Englisch</option>
-        </select>
+        </select></div>
       </div>
 
       <div class="lyricsList" id="lyricsList"></div>
@@ -441,9 +575,32 @@ const wave = document.getElementById('wave');
     const curLabel = document.getElementById('curLabel');
     const ctx = wave.getContext('2d');
 
+    // Trim Buttons
+    const trimFrontBtn = document.getElementById('trimFront');
+    const trimBackBtn  = document.getElementById('trimBack');
+    const undoTrimBtn  = document.getElementById('undoTrim');
+
     
 
     const timeSigSelect = document.getElementById('timeSig');
+const gridSnapBtn  = document.getElementById('gridSnapBtn');
+let snapEnabled = true; // default AN
+
+function updateGridSnapUI(){
+  try{
+    if(!gridSnapBtn) return;
+    gridSnapBtn.classList.toggle('active', !!snapEnabled);
+    gridSnapBtn.textContent = snapEnabled ? 'Grid Snap' : 'Grid Snap'; // label stays, highlight shows state
+    gridSnapBtn.title = snapEnabled ? 'Cursor am Raster einrasten (AN)' : 'Cursor am Raster einrasten (AUS)';
+  }catch(_){}
+}
+gridSnapBtn?.addEventListener('click', ()=>{
+  snapEnabled = !snapEnabled;
+  updateGridSnapUI();
+});
+
+updateGridSnapUI();
+
 // --- Pitch (Octaves) UI & Engine integration ---
 const pitchMinusBtn = document.getElementById('pitchMinus');
 const pitchPlusBtn  = document.getElementById('pitchPlus');
@@ -724,6 +881,180 @@ updatePitchUI();
     let ac=null, masterGain=null, engineSource=null, engineGain=null, usingEngine=false;
     let rafId=0, engineStartCtxTime=0, engineStartOffset=0;
 
+    
+    
+    // === Undo Stack ===
+    const UNDO_LIMIT = 10;
+    const undoStack = [];
+
+    function cloneAudioBuffer(buf){
+      if(!buf) return null;
+      const sr = buf.sampleRate|0;
+      const numCh = buf.numberOfChannels|0;
+      const len = buf.length|0;
+      const out = createNewBuffer(numCh, len, sr);
+      if(!out) return null;
+      for(let ch=0; ch<numCh; ch++){
+        out.getChannelData(ch).set(buf.getChannelData(ch));
+      }
+      return out;
+    }
+
+    function pushEditorState(reason='trim'){
+      // Speichere Audio + Marker + Cursor + View
+      try{
+        const snap = {
+          audio: cloneAudioBuffer(audioBuffer),
+          markers: JSON.parse(JSON.stringify(markers||[])),
+          cursorTime,
+          viewStart,
+          viewDur
+        };
+        undoStack.push(snap);
+        while(undoStack.length > UNDO_LIMIT) undoStack.shift();
+        // console.log('Undo push', reason, snap);
+      }catch(e){
+        console.warn('Undo push failed', e);
+      }
+    }
+
+    function restoreEditorState(snap){
+      if(!snap || !snap.audio) return;
+      audioBuffer = snap.audio;
+      pitchedBuffer = null;
+      duration = audioBuffer.duration || 0;
+      sampleRate = audioBuffer.sampleRate || sampleRate;
+      markers = Array.isArray(snap.markers) ? snap.markers : [];
+      cursorTime = Math.min(Math.max(0, snap.cursorTime||0), duration);
+      // View
+      minView = Math.max(0.25, gridStep()/4);
+      setView(Math.max(0, Math.min(snap.viewStart||0, Math.max(0, duration-minView))), 
+              Math.max(minView, Math.min(snap.viewDur||duration, duration)));
+      renderMarkerList?.();
+      rebuildLyrics({ preserve:true });
+      draw();
+      if(usingEngine) { stopEngine(); }
+    }
+
+    function undoTrim(){
+      const snap = undoStack.pop();
+      if(!snap){
+        // kleiner blink/feedback?
+        // Optional: shake button or toast
+        return;
+      }
+      restoreEditorState(snap);
+    }
+
+    undoTrimBtn?.addEventListener('click', undoTrim);
+
+    // === Trim Funktionen (Front/Back) ===
+    function createNewBuffer(numCh, length, sr){
+      try{
+        const AC = window.AudioContext || window.webkitAudioContext;
+        const tmp = new AC({ sampleRate: sr });
+        const buf = tmp.createBuffer(numCh, length, sr);
+        try{ tmp.close(); }catch(_){}
+        return buf;
+      }catch(_){
+        // Fallback auf vorhandenen AC
+        try{
+          ensureAC();
+          return ac.createBuffer(numCh, length, sr);
+        }catch(e){
+          console.warn('Buffer create failed', e);
+          return null;
+        }
+      }
+    }
+
+    function replaceAudioBuffer(newBuf){
+      if(!newBuf) return;
+      audioBuffer = newBuf;
+      pitchedBuffer = null; // Pitch Cache invalidieren
+      duration = audioBuffer.duration || 0;
+      sampleRate = audioBuffer.sampleRate || sampleRate;
+      // Cursor & View neu setzen
+      cursorTime = Math.min(cursorTime, duration);
+      minView = Math.max(0.25, gridStep()/4);
+      setView(0, Math.max(minView, Math.min(viewDur||duration, duration)));
+      // Start/End Marker sicherstellen/aktualisieren
+      let startM = markers.find(m=>m.pin==='start');
+      let endM   = markers.find(m=>m.pin==='end');
+      if(!startM || !endM){
+        markers = markers.filter(m=>!m.pin); // alles außer pins behalten, dann frisch anlegen
+        markers.unshift({ id: uid(), time: 0, label: 'Start', active: false, pin: 'start', listOrder: 0, seqReps: 1 });
+        markers.push({ id: uid(), time: duration, label: 'Ende', active: false, pin: 'end', listOrder: 1 });
+      }else{
+        startM.time = 0;
+        endM.time = duration;
+      }
+      reindexListOrder();
+      renderMarkerList?.();
+      rebuildLyrics({ preserve:true });
+      draw();
+      if(usingEngine) { stopEngine(); } // nach Trim immer stoppen
+    }
+
+    function trimAtCursorFront(){
+      pushEditorState("trimFront");
+      if(!audioBuffer || !Number.isFinite(cursorTime)) return;
+      const at = clamp(cursorTime, 0, duration);
+      const sr = audioBuffer.sampleRate|0;
+      const atSmp = Math.floor(at * sr);
+      const numCh = audioBuffer.numberOfChannels|0;
+      const inLen = audioBuffer.length|0;
+      const outLen = Math.max(0, inLen - atSmp);
+      const newBuf = createNewBuffer(numCh, outLen, sr);
+      if(!newBuf) return;
+
+      for(let ch=0; ch<numCh; ch++){
+        const src = audioBuffer.getChannelData(ch);
+        const dst = newBuf.getChannelData(ch);
+        dst.set(src.subarray(atSmp, inLen), 0);
+      }
+
+      // Marker verschieben (alles vor Cursor fällt weg)
+      markers = markers
+        .map(m=> ({ ...m, time: clamp(m.time - at, 0, (outLen/sr)) }))
+        .filter(m=> m.time >= 0 - EPS && m.time <= (outLen/sr) + EPS);
+
+      replaceAudioBuffer(newBuf);
+      // Cursor an den Anfang
+      setCursor(0, true);
+      draw();
+    }
+
+    function trimAtCursorBack(){
+      pushEditorState("trimBack");
+      if(!audioBuffer || !Number.isFinite(cursorTime)) return;
+      const at = clamp(cursorTime, 0, duration);
+      const sr = audioBuffer.sampleRate|0;
+      const atSmp = Math.floor(at * sr);
+      const numCh = audioBuffer.numberOfChannels|0;
+      const newBuf = createNewBuffer(numCh, atSmp, sr);
+      if(!newBuf) return;
+
+      for(let ch=0; ch<numCh; ch++){
+        const src = audioBuffer.getChannelData(ch);
+        const dst = newBuf.getChannelData(ch);
+        dst.set(src.subarray(0, atSmp), 0);
+      }
+
+      // Marker abschneiden (alles nach Cursor fällt weg)
+      markers = markers
+        .filter(m=> m.time <= at + EPS)
+        .map(m=> ({ ...m, time: clamp(m.time, 0, at) }));
+
+      replaceAudioBuffer(newBuf);
+      // Cursor ans neue Ende snappen
+      setCursor(duration, true);
+      draw();
+    }
+
+    trimFrontBtn?.addEventListener('click', trimAtCursorFront);
+    trimBackBtn ?.addEventListener('click', trimAtCursorBack);
+
     // --- Utils ---
     function uid(){ return Math.random().toString(36).slice(2,9); }
     function clamp(v,min,max){ return Math.min(max,Math.max(min,v)); }
@@ -829,7 +1160,7 @@ function insertMarkerAscending(newM){
 
 
     function getActiveMarkersSorted(){
-      return markers.filter(m=>m.active).sort((a,b)=>a.time-b.time).slice(0,2);
+      return markers.filter(m=>m.active && !m.playlistClone).sort((a,b)=>a.time-b.time).slice(0,2);
     }
     function ensureMaxTwoActive(toggled){
       const act = markers.filter(m=>m.active);
@@ -847,6 +1178,7 @@ function insertMarkerAscending(newM){
     
 // === Quick Loop: State & Helpers ===
 const quickLoop = { active:false, a:null, b:null };
+try{ window.quickLoop = quickLoop; }catch(_){}
 let qlLongTimer = null;
 const QL_LONG_MS = 350;   // Long-Press Schwelle
 const QL_MOVE_TOL = 8;    // Bewegungs-Toleranz gegen versehentliches Ziehen
@@ -941,7 +1273,7 @@ function getLoopRegion(){
   let snapped = null;
   if (wasPlaying) {
     const tNow = getPlayheadTime();
-    snapped = clamp(snapToGrid(tNow), 0, duration || 0);
+    snapped = (typeof snapEnabled!=='undefined' && snapEnabled) ? clamp(snapToGrid(tNow), 0, duration || 0) : tNow;
   }
 
   // Engine sauber stoppen
@@ -1132,7 +1464,7 @@ idx.addEventListener('pointercancel', ()=>{
 function ensureDefaultStartEndMarkers() {
   if (!Number.isFinite(duration) || duration <= 0) return;
   if (Array.isArray(markers) && markers.length === 0) {
-    const startM = { id: uid(), time: 0, label: 'Start', active: true, pin: 'start', listOrder: 0, seqReps: 1 };
+    const startM = { id: uid(), time: 0, label: 'Start', active: false, pin: 'start', listOrder: 0, seqReps: 1 };
     const endM   = { id: uid(), time: duration, label: 'Ende',  active: true,  pin: 'end', listOrder: 1 };
     markers.push(startM, endM);
     reindexListOrder();
@@ -1183,6 +1515,11 @@ function ensureDefaultStartEndMarkers() {
       const cssW = wave.clientWidth || 340, cssH = 240;
       wave.width = Math.floor(cssW*dpr); wave.height = Math.floor(cssH*dpr);
       const ctx = wave.getContext('2d');
+
+    // Trim Buttons
+    const trimFrontBtn = document.getElementById('trimFront');
+    const trimBackBtn  = document.getElementById('trimBack');
+    const undoTrimBtn  = document.getElementById('undoTrim');
       ctx.setTransform(dpr,0,0,dpr,0,0);
       ctx.clearRect(0,0,cssW,cssH);
       renderHit.clear();
@@ -1286,7 +1623,7 @@ function ensureDefaultStartEndMarkers() {
       // Marker + Beschriftungen
       if(markers.length>0 && duration>0){
         ctx.font='11px ui-monospace, SFMono-Regular, Menlo, monospace';
-        const sorted=markers.slice().sort((a,b)=>a.time-b.time);
+        const sorted = markers.filter(m=>!m.playlistClone).slice().sort((a,b)=>a.time-b.time);
         const visible=sorted.filter(m=>m.time>=viewStart-EPS && m.time<=viewEnd()+EPS);
         visible.forEach(m=>{
           const idx=sorted.findIndex(mm=>mm.id===m.id);
@@ -1328,7 +1665,8 @@ function ensureDefaultStartEndMarkers() {
     // --- Cursor setzen (Snap bleibt) ---
     function setCursor(t, snapIt=true){
       const step = gridStep();
-      const target = snapIt ? Math.round(t/step)*step : t;
+      const doSnap = !!snapIt && !!(typeof snapEnabled!=='undefined' ? snapEnabled : true);
+      const target = doSnap ? Math.round(t/step)*step : t;
       cursorTime = clamp(target, 0, duration||0);
       curLabel.textContent = formatTime(cursorTime);
     }
@@ -1566,7 +1904,7 @@ cursorTime = +json.cursorTime || 0;
           if(isFinite(blAuto) && blAuto > 0){
             const headersAuto = [];
             (markers||[])
-              .filter(m=> (m.label||'').trim().length>0 && m.pin!=='start' && m.pin!=='end')
+              .filter(m=> (m.label||'').trim().length>0 && m.pin!=='start' && m.pin!=='end' && m.playlistClone !== true)
               .forEach(m=>{
                 const barNumber = Math.floor((m.time + EPS) / blAuto) + 1; // 1-basiert
                 const lineIdx   = Math.floor((barNumber - 1) / 2) + 1;     // 2 Takte pro Zeile
@@ -1802,6 +2140,7 @@ ensureDefaultStartEndMarkers();
     row.className = 'markerRow';
     row.dataset.id = m.id;
     row.draggable = true;
+    try{ row.classList.toggle('muted', !!(m && m.muted && !m.playlistClone)); }catch(_){}
 
     const handle = document.createElement('div');
     handle.className = 'dragHandle';
@@ -1812,56 +2151,160 @@ ensureDefaultStartEndMarkers();
     name.addEventListener('change', ()=>{ m.label=name.value; draw(); });
 
     
-    // --- Neue +/- Steuerung für Wiederholungen im Custom Arrangement ---
-    // Standardwert initialisieren
-    if (!Number.isFinite(m.seqReps)) m.seqReps = 1;
-
-    // Kompakter Zähler: [-] [n] [+]
+    
+    
+    // kleine Badge für Kopien
+    if(m.playlistClone === true){
+      const badge = document.createElement('div');
+      badge.className = 'mono';
+      badge.style.fontSize = '12px';
+      badge.style.color = '#94a3b8';
+      badge.textContent = 'Playlist‑Kopie';
+      // wrap name + badge in a flex column
+      const nameWrap = document.createElement('div');
+      nameWrap.style.display = 'grid';
+      nameWrap.style.gap = '4px';
+      name.parentNode && name.parentNode.replaceChild(nameWrap, name);
+      nameWrap.appendChild(name);
+      nameWrap.appendChild(badge);
+    }
+    // --- Playlist-Duplizieren/Löschen (wir entfernen die alte +/- Zähler-UI) ---
     const controls = document.createElement('div');
-    controls.className = 'seq-reps';
+    controls.className = 'seq-reps'; // reuse class for styling
     controls.style.display = 'flex';
     controls.style.alignItems = 'center';
     controls.style.gap = '6px';
 
-    const minus = document.createElement('button');
-    minus.className = 'btn';
-    minus.textContent = '-';
-    minus.title = 'Wiederholungen verringern (0 = überspringen)';
-    minus.addEventListener('click', ()=>{
-      const cur = Number.isFinite(m.seqReps) ? Math.floor(m.seqReps) : 1;
-      m.seqReps = Math.max(0, cur - 1);
-      val.textContent = String(m.seqReps);
+    // "+" = duplizieren (erstellt eine Playlist-Kopie direkt unter diesem Eintrag)
+    const dupBtn = document.createElement('button');
+    dupBtn.className = 'btn';
+    dupBtn.textContent = '+';
+    dupBtn.title = 'Playlist-Kopie unterhalb einfügen';
+    dupBtn.addEventListener('click', ()=>{
+      try{
+        // Basis für die Kopie: Originalmarker (wenn Kopie, dann dessen Original suchen)
+        const baseId = m.playlistCloneOf ? m.playlistCloneOf : m.id;
+        const base = markers.find(x => x.id === baseId);
+        if(!base) return;
+        const clone = {
+          id: uid(),
+          time: base.time,           // keine Auswirkung auf Waveform (wir blenden Kopien dort aus)
+          label: base.label + ' (Kopie)',
+          active: false,
+          playlistClone: true,
+          playlistCloneOf: base.id
+        };
+        // listOrder: direkt nach die aktuelle Zeile
+        ensureListOrder();
+        const after = (m.listOrder ?? 0);
+        markers.forEach(mm=>{ if((mm.listOrder ?? 0) > after) mm.listOrder = (mm.listOrder ?? 0) + 1; });
+        clone.listOrder = after + 1;
+        markers.push(clone);
+        // Keep array in UI order
+        markers.sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
+        renderMarkerList();
+      }catch(e){ console.warn('dup error', e); }
     });
 
-    const val = document.createElement('div');
-    val.className = 'mono';
-    val.style.minWidth = '1.5em';
-    val.style.textAlign = 'center';
-    val.textContent = String(Number.isFinite(m.seqReps) ? Math.floor(m.seqReps) : 1);
+    
+    // "−" = Kopie entfernen ODER "Mute" bei Original
+    const actionBtn = document.createElement('button');
+    actionBtn.className = 'btn';
+    if(m.playlistClone === true){
+      actionBtn.textContent = '−';
+      actionBtn.title = 'Diese Playlist-Kopie entfernen';
+      actionBtn.addEventListener('click', ()=>{
+        try{
+          // Entfernen und ListOrder neu indizieren
+          const idx = markers.findIndex(x => x.id === m.id);
+          if(idx >= 0){
+            const removedOrder = markers[idx].listOrder ?? idx;
+            markers.splice(idx,1);
+            // close gaps
+            markers.forEach(mm=>{
+              if((mm.listOrder ?? 0) > removedOrder) mm.listOrder = (mm.listOrder ?? 0) - 1;
+            });
+            renderMarkerList();
+          }
+        }catch(e){ console.warn('del error', e); }
+      });
+    }else{
+      // ORIGINAL: Mute-Schalter
+      actionBtn.textContent = (m.muted ? 'Unmute' : 'Mute');
+      actionBtn.title = 'Originalspur stummschalten (aus Reihenfolge ausklammern)';
+      actionBtn.addEventListener('click', ()=>{
+        try{
+          m.muted = !m.muted;
+          renderMarkerList();
+          try{
+            if(window.playSeqOrder && typeof window.getPlayheadTime === 'function' && typeof window.startEngineAt === 'function'){
+              startEngineAt(getPlayheadTime());
+            }
+          }catch(_){}
+        }catch(e){ console.warn('mute toggle error', e); }
+      });
+    }
 
-    const plus = document.createElement('button');
-    plus.className = 'btn';
-    plus.textContent = '+';
-    plus.title = 'Wiederholungen erhöhen';
-    plus.addEventListener('click', ()=>{
-      const cur = Number.isFinite(m.seqReps) ? Math.floor(m.seqReps) : 1;
-      m.seqReps = Math.max(0, cur + 1);
-      val.textContent = String(m.seqReps);
-    });
 
-    controls.appendChild(minus);
-    controls.appendChild(val);
-    controls.appendChild(plus);
+    
+    // --- Notizblock-Schaltfläche nur für Kopiespuren ---
+    let noteWrap = null;
+    if (m.playlistClone === true) {
+      const noteBtn = document.createElement('button');
+      noteBtn.className = 'btn btn-sm';
+      noteBtn.title = 'Notiz zu dieser Kopie hinzufügen/anzeigen';
+      noteBtn.setAttribute('aria-label','Notiz');
+      noteBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h8l6 6v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5z" stroke="#93c5fd" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 3v4a2 2 0 0 0 2 2h4" stroke="#93c5fd" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
-    row.appendChild(handle);
+      // kleiner Indikator, wenn Text vorhanden ist
+      function updateNoteIndicator(){
+        try{
+          if (m.note && String(m.note).trim().length > 0){
+            noteBtn.style.borderColor = '#60a5fa';
+            noteBtn.style.boxShadow = '0 0 0 2px rgba(59,130,246,.15) inset';
+          } else {
+            noteBtn.style.borderColor = '';
+            noteBtn.style.boxShadow = '';
+          }
+        }catch(_){}
+      }
+
+      // Editor (ausklappbar) unter der Zeile
+      noteWrap = document.createElement('div');
+      noteWrap.style.gridColumn = '1 / -1';
+      noteWrap.style.marginTop = '8px';
+      noteWrap.style.display = (m.note && m.note.length) ? 'block' : 'none';
+
+      const noteArea = document.createElement('textarea');
+      noteArea.className = 'field';
+      noteArea.rows = 2;
+      noteArea.placeholder = 'Notiz für diese Kopiespur …';
+      noteArea.value = (m.note || '');
+      noteArea.addEventListener('input', ()=>{ m.note = noteArea.value; updateNoteIndicator(); });
+
+      noteWrap.appendChild(noteArea);
+
+      noteBtn.addEventListener('click', ()=>{
+        const vis = (noteWrap.style.display !== 'none');
+        noteWrap.style.display = vis ? 'none' : 'block';
+        if (!vis) { try { noteArea.focus(); } catch(_){ } }
+      });
+
+      controls.appendChild(noteBtn);
+      updateNoteIndicator();
+    }
+
+    controls.appendChild(dupBtn);
+    controls.appendChild(actionBtn);
+
+    if (noteWrap) { row.appendChild(noteWrap); }
+row.appendChild(handle);
     row.appendChild(name);
     row.appendChild(controls);
     markerListEl.appendChild(row);
   });
 }
-
-
-    // --- Buttons ---
+// --- Buttons ---
     addMarkerBtn.addEventListener('click', ()=>{
   if(duration<=0) return alert('Bitte zuerst eine Audiodatei laden.');
   const name = prompt('Name für den Marker:'); if(name===null) return;
@@ -1889,6 +2332,10 @@ ensureDefaultStartEndMarkers();
 
     playSel.addEventListener('click', async ()=>{ await ensureACResumed(); startEngineAt(cursorTime); });
     pauseBtn.addEventListener('click', ()=>{ stopEngine(); });
+    // Floating play/stop buttons mirror behavior
+    document.getElementById('floatPlay')?.addEventListener('click', async ()=>{ await ensureACResumed(); startEngineAt(cursorTime); });
+    document.getElementById('floatStop')?.addEventListener('click', ()=>{ stopEngine(); });
+
 
     clearBtn.addEventListener('click', ()=>{
       stopEngine();
@@ -1906,7 +2353,7 @@ ensureDefaultStartEndMarkers();
           if(!isFinite(bl) || bl<=0){ alert('Bitte BPM einstellen, damit Takte berechnet werden können.'); perSegmentLineNumbering=false; return; }
           const headers = [];
           (markers||[])
-            .filter(m=> (m.label||'').trim().length>0 && m.pin!=='start' && m.pin!=='end')
+            .filter(m=> (m.label||'').trim().length>0 && m.pin!=='start' && m.pin!=='end' && m.playlistClone !== true)
             .forEach(m=>{
               const barNumber = Math.floor((m.time + EPS) / bl) + 1; // 1-basiert
               const lineIdx = Math.floor((barNumber - 1) / 2) + 1;    // 2 Takte pro Zeile, 1-basiert
@@ -1953,7 +2400,7 @@ ensureDefaultStartEndMarkers();
       const headers = [];
       if (isFinite(bl) && bl > 0) {
         markers
-          .filter(m => (m.label || '').trim().length > 0)
+          .filter(m => (m.label || '').trim().length > 0 && m.pin!=='start' && m.pin!=='end' && m.playlistClone !== true)
           .forEach(m => {
             const barNumber = Math.floor((m.time + EPS) / bl) + 1; // 1-basiert
             const lineIdx   = Math.floor((barNumber - 1) / 2) + 1; // 2 Takte pro Zeile
@@ -2119,7 +2566,7 @@ ensureDefaultStartEndMarkers();
       playSeqToggle.checked = !!playSeqOrder;
       playSeqToggle.addEventListener('change', ()=>{
         playSeqOrder = !!playSeqToggle.checked;
-        if (playSeqOrder){
+        if (playSeqOrder && !(window.quickLoop && window.quickLoop.active)) {
           try{ if(typeof clearQuickLoop === 'function') clearQuickLoop(); }catch(_){}
           try{ (markers||[]).forEach(m=> m.active = false); }catch(_){}
           try{ if(typeof renderMarkerList === 'function') renderMarkerList(); }catch(_){}
@@ -2144,7 +2591,7 @@ ensureDefaultStartEndMarkers();
     if (typeof __orig_getLoopRegion === 'function') {
       window.getLoopRegion = function(){
         try{
-          if (playSeqOrder) return { s:0, e: duration, mode:'full' };
+          if (playSeqOrder && !(window.quickLoop && window.quickLoop.active)) return { s:0, e: duration, mode:'full' };
         }catch(_){}
         return __orig_getLoopRegion();
       };
@@ -2176,7 +2623,7 @@ ensureDefaultStartEndMarkers();
     let __seqRaf = 0;
     function __seqMonitor(){
       try{
-        if(!(typeof usingEngine !== 'undefined' && usingEngine && playSeqOrder && (duration||0) > 0 && (markers||[]).length > 0)){
+        if(!(typeof usingEngine !== 'undefined' && usingEngine && playSeqOrder && !(window.quickLoop && window.quickLoop.active) && !(window.quickLoop && window.quickLoop.active) && (duration||0) > 0 && (markers||[]).length > 0)){
           __seqRaf = 0;
           return;
         }
@@ -2184,6 +2631,35 @@ ensureDefaultStartEndMarkers();
         if (!seqCurrentStartId) seqCurrentStartId = findChronoSegmentStartIdAt(t);
         const segEnd = segmentEndTimeForStartId(seqCurrentStartId);
         
+
+        
+// --- FIX: sofort zum nächsten Marker springen, falls der aktuelle (z.B. der erste bei 0:00) gemutet ist ---
+try{
+  const __curM = getMarkerById(seqCurrentStartId);
+  if (__curM && __curM.muted === true && __curM.playlistClone !== true){
+    // finde das nächste abspielbare Segment (nicht gemutet, sinnvolle Länge)
+    let __guard = 0;
+    let __nid = seqCurrentStartId;
+    while(__guard++ < 100){
+      __nid = nextIdInSequence(__nid);
+      if(!__nid) break;
+      const __m2 = getMarkerById(__nid);
+      const __end2 = segmentEndTimeForStartId(__nid);
+      const __len2 = __m2 ? Math.max(0, __end2 - (__m2.time||0)) : 0;
+      const __mutedOriginal = __m2 && __m2.muted === true && __m2.playlistClone !== true;
+      if (__len2 > 1e-3 && !__mutedOriginal) break;
+    }
+    if(__nid){
+      seqCurrentStartId = __nid;
+      // Optional: Wiederholungszähler zurücksetzen, falls genutzt
+      try{ __seqRepsLeft = 1; }catch(_){}
+      const __mN0 = getMarkerById(__nid);
+      if (__mN0) smoothJumpTo(__mN0.time||0);
+      __seqRaf = requestAnimationFrame(__seqMonitor);
+      return;
+    }
+  }
+}catch(_){}
 if (t >= segEnd - 0.02){
   // Initialisiere Wiederholungszähler, falls nötig
   if (typeof __seqRepsLeft === 'undefined') { __seqRepsLeft = 0; }
@@ -2191,14 +2667,31 @@ if (t >= segEnd - 0.02){
   const segStart = curM ? (curM.time||0) : 0;
   const segLen = Math.max(0, (segEnd - segStart));
 
-  function repsFor(id){
+  
+  // Sofort überspringen, wenn aktueller Marker gemutet ist (nur bei Originalen)
+  try{
+    if (curM && curM.muted === true && curM.playlistClone !== true){
+      const nid0 = nextPlayableId(seqCurrentStartId);
+      if(nid0){
+        seqCurrentStartId = nid0;
+        __seqRepsLeft = repsFor(nid0);
+        const mN0 = getMarkerById(nid0);
+        if (mN0) smoothJumpTo(mN0.time||0);
+        __seqRaf = requestAnimationFrame(__seqMonitor);
+        return;
+      }
+    }
+  }catch(_){}
+function repsFor(id){
     const mm = getMarkerById(id);
     if (!mm) return 1;
+    // Wenn Original gemutet: 0 Wiederholungen => wird übersprungen
+    if (mm.muted === true && mm.playlistClone !== true) return 0;
     const v = Number.isFinite(mm.seqReps) ? Math.floor(mm.seqReps) : 1;
     return Math.max(0, v);
   }
   function nextPlayableId(id){
-    // finde das nächste mit reps>0 UND sinnvoller Segmentlänge
+    // finde das nächste mit reps>0, sinnvoller Segmentlänge und NICHT gemutet (bei Originalen)
     let guard=0;
     let nid = id;
     while(guard++ < 100){
@@ -2208,10 +2701,32 @@ if (t >= segEnd - 0.02){
       const m2 = getMarkerById(nid);
       const end2 = segmentEndTimeForStartId(nid);
       const len2 = m2 ? Math.max(0, end2 - (m2.time||0)) : 0;
-      if (r > 0 && len2 > 1e-3) return nid;
+      const mutedOriginal = m2 && m2.muted === true && m2.playlistClone !== true;
+      if (r > 0 && len2 > 1e-3 && !mutedOriginal) return nid;
     }
     return null;
   }
+
+
+// Helper: first playable start-id for wrapping the Custom Arrangement playlist
+function firstPlayableId(){
+  try{
+    const ls = (typeof markersByList === 'function') ? markersByList() : ((typeof markers !== 'undefined' && markers) || []);
+    for(let i=0;i<ls.length;i++){
+      const m = ls[i];
+      if(!m) continue;
+      if(m.pin === 'end') continue; // skip artificial end pin
+      const end = segmentEndTimeForStartId(m.id);
+      const len = Math.max(0, end - (m.time||0));
+      const mutedOriginal = (m.muted === true && m.playlistClone !== true);
+      const r = (typeof repsFor === 'function') ? repsFor(m.id) : 1;
+      if(r > 0 && len > 1e-3 && !mutedOriginal) return m.id;
+    }
+  }catch(_){}
+  return null;
+}
+
+
 
   // Erstmals setzen, wenn 0
   if (!__seqRepsLeft || __seqRepsLeft < 0) {
@@ -2227,8 +2742,16 @@ if (t >= segEnd - 0.02){
       __seqRepsLeft = repsFor(nid);
       if (mN) smoothJumpTo(mN.time||0);
     } else {
-      try{ if(typeof stopEngine === 'function') __orig_stopEngine(); }catch(_){}
-      __seqRaf = 0; return;
+      const __fid = (typeof firstPlayableId === 'function') ? firstPlayableId() : null;
+      if (__fid){
+        const __mF = getMarkerById(__fid);
+        seqCurrentStartId = __fid;
+        try{ __seqRepsLeft = (typeof repsFor === 'function') ? repsFor(__fid) : 1; }catch(_){}
+        if (__mF) smoothJumpTo(__mF.time||0);
+      } else {
+        try{ if(typeof stopEngine === 'function') __orig_stopEngine(); }catch(_){}
+        __seqRaf = 0; return;
+      }
     }
   } else {
     if (__seqRepsLeft > 1){
@@ -2242,9 +2765,17 @@ if (t >= segEnd - 0.02){
         __seqRepsLeft = repsFor(nid);
         if (mN) smoothJumpTo(mN.time||0);
       } else {
+        const __fid = (typeof firstPlayableId === 'function') ? firstPlayableId() : null;
+      if (__fid){
+        const __mF = getMarkerById(__fid);
+        seqCurrentStartId = __fid;
+        try{ __seqRepsLeft = (typeof repsFor === 'function') ? repsFor(__fid) : 1; }catch(_){}
+        if (__mF) smoothJumpTo(__mF.time||0);
+      } else {
         try{ if(typeof stopEngine === 'function') __orig_stopEngine(); }catch(_){}
         __seqRaf = 0; return;
       }
+    }
     }
   }
 }
@@ -2253,7 +2784,7 @@ if (t >= segEnd - 0.02){
 
         // Enforce no-loop when sequence mode is active
         try{
-          if (playSeqOrder && typeof engineSource !== 'undefined' && engineSource){
+          if (playSeqOrder && !(window.quickLoop && window.quickLoop.active) && typeof engineSource !== 'undefined' && engineSource){
             engineSource.loop = false;
             try{ engineSource.loopStart = 0; }catch(_){}
             try{ engineSource.loopEnd   = (typeof duration !== 'undefined' ? (duration||0) : 0); }catch(_){}
@@ -2264,7 +2795,7 @@ if (t >= segEnd - 0.02){
 
         // Enforce no-loop when sequence mode is active
         try{
-          if (playSeqOrder && typeof engineSource !== 'undefined' && engineSource){
+          if (playSeqOrder && !(window.quickLoop && window.quickLoop.active) && typeof engineSource !== 'undefined' && engineSource){
             engineSource.loop = false;
             try{ engineSource.loopStart = 0; }catch(_){}
             try{ engineSource.loopEnd   = (typeof duration !== 'undefined' ? (duration||0) : 0); }catch(_){}
@@ -2280,7 +2811,7 @@ if (t >= segEnd - 0.02){
       window.startEngineAt = function(t){
         __orig_startEngineAt(t);
         try{
-          if (playSeqOrder){
+          if (playSeqOrder && !(window.quickLoop && window.quickLoop.active)) {
             if(__seqRaf) cancelAnimationFrame(__seqRaf);
             seqCurrentStartId = findChronoSegmentStartIdAt(
               (typeof getPlayheadTime === 'function') ? getPlayheadTime() : (t||0)
@@ -2289,7 +2820,7 @@ if (t >= segEnd - 0.02){
 
         // Enforce no-loop when sequence mode is active
         try{
-          if (playSeqOrder && typeof engineSource !== 'undefined' && engineSource){
+          if (playSeqOrder && !(window.quickLoop && window.quickLoop.active) && typeof engineSource !== 'undefined' && engineSource){
             engineSource.loop = false;
             try{ engineSource.loopStart = 0; }catch(_){}
             try{ engineSource.loopEnd   = (typeof duration !== 'undefined' ? (duration||0) : 0); }catch(_){}
@@ -2317,7 +2848,7 @@ if (t >= segEnd - 0.02){
       window.resumeWithUpdatedLoopPreservingPhase = function(){
         __orig_resume();
         try{
-          if (playSeqOrder && typeof engineSource !== 'undefined' && engineSource){
+          if (playSeqOrder && !(window.quickLoop && window.quickLoop.active) && typeof engineSource !== 'undefined' && engineSource){
             engineSource.loop = false;
             try{ engineSource.loopStart = 0; }catch(_){}
             try{ engineSource.loopEnd   = (typeof duration !== 'undefined' ? (duration||0) : 0); }catch(_){}
@@ -2349,7 +2880,7 @@ if (t >= segEnd - 0.02){
     if (typeof __prev_start === 'function'){
       window.startEngineAt = function(t){
         __prev_start(t);
-        try{ if(!window.playSeqOrder) enforceLoopFromRegion(); }catch(_){}
+        try{ if(!window.playSeqOrder || (window.quickLoop && window.quickLoop.active)) enforceLoopFromRegion(); }catch(_){}
       };
     }
   }catch(_){}
@@ -2360,7 +2891,7 @@ if (t >= segEnd - 0.02){
     if (typeof __prev_resume === 'function'){
       window.resumeWithUpdatedLoopPreservingPhase = function(){
         __prev_resume();
-        try{ if(!window.playSeqOrder) enforceLoopFromRegion(); }catch(_){}
+        try{ if(!window.playSeqOrder || (window.quickLoop && window.quickLoop.active)) enforceLoopFromRegion(); }catch(_){}
       };
     }
   }catch(_){}
@@ -2369,7 +2900,7 @@ if (t >= segEnd - 0.02){
   try{
     if (typeof playSeqToggle !== 'undefined' && playSeqToggle){
       playSeqToggle.addEventListener('change', ()=>{
-        try{ if(!window.playSeqOrder) enforceLoopFromRegion(); }catch(_){}
+        try{ if(!window.playSeqOrder || (window.quickLoop && window.quickLoop.active)) enforceLoopFromRegion(); }catch(_){}
       });
     }
   }catch(_){}
@@ -2704,5 +3235,106 @@ if (t >= segEnd - 0.02){
   })();
   </script>
     
+
+<!-- === Injection: Auto-disable "Custom Arrangement" when 2 markers are active === -->
+<script>
+(function(){
+  // Wait for DOM and previous scripts to be ready
+  function ready(fn){ if(document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+  ready(function(){
+    try{
+      // These are defined in the main script
+      const lblDefault = 'Sortiere Marker per Drag and Drop. Bei Aktivierung wird diese Reihenfolge gespielt.';
+      const lblLocked  = 'Marker-Loop aktiv – Zum Aktivieren von Custom Arrangement die Checkbox ankreuzen (aktive Marker werden dann deaktiviert).';
+
+      function updateArrangementLock(){
+        try{
+          // "getActiveMarkersSorted" returns up to the first 2 active markers sorted by time
+          const isMarkerLoop = (typeof getActiveMarkersSorted === 'function') && getActiveMarkersSorted().length === 2;
+          if(isMarkerLoop){
+            // turn off and lock the custom arrangement
+            if(typeof playSeqOrder !== 'undefined') playSeqOrder = false;
+            if(window.playSeqToggle){
+              playSeqToggle.checked = false;
+              try{ playSeqToggle.closest('label')?.classList.remove('active'); }catch(_){}
+            }
+            if(window.seqInfo){
+              seqInfo.textContent = lblLocked;
+              seqInfo.style.opacity = '0.7';
+            }
+          }else{
+            // unlock branch: nichts weiter nötig (Checkbox bleibt stets aktiv)
+            if(window.seqInfo){
+              seqInfo.textContent = lblDefault;
+              seqInfo.style.opacity = '0.9';
+            }
+          }
+          // keep audio engine/looping logic in sync
+          try{ if(window.usingEngine) resumeWithUpdatedLoopPreservingPhase(); }catch(_){}
+          try{ if(typeof draw === 'function') draw(); }catch(_){}
+        }catch(e){ console.warn('updateArrangementLock error', e); }
+      }
+      window.updateArrangementLock = updateArrangementLock;
+
+      // Make sure any UI rebuild also refreshes the lock
+      function patchRenderMarkerList(){
+        if(typeof window.renderMarkerList === 'function' && !window.renderMarkerList.__patchedByLoopLock){
+          const __old = window.renderMarkerList;
+          window.renderMarkerList = function(){
+            const r = __old.apply(this, arguments);
+            try{ updateArrangementLock(); }catch(_){}
+            return r;
+          };
+          window.renderMarkerList.__patchedByLoopLock = true;
+        }
+      }
+      patchRenderMarkerList();
+      // Late patch if renderMarkerList is defined later
+      const tryPatchTimer = setInterval(()=>{
+        try{
+          patchRenderMarkerList();
+          // When markers exist and the function is patched, we can stop trying
+          if(window.renderMarkerList && window.renderMarkerList.__patchedByLoopLock){ clearInterval(tryPatchTimer); }
+        }catch(_){}
+      }, 200);
+
+      // Guard the checkbox itself: implement PingPong behavior
+      if(window.playSeqToggle){
+        playSeqToggle.addEventListener('change', function(){
+          try{
+            const isLoop = (typeof getActiveMarkersSorted === 'function') && getActiveMarkersSorted().length === 2;
+            if(this.checked){
+              // User wants Custom Arrangement ON
+              if(isLoop){
+                // PingPong: aktive Marker deaktivieren und dann Arrangement aktivieren
+                try{
+                  if(Array.isArray(window.markers)){
+                    window.markers.forEach(m => { if(m && m.active) m.active = false; });
+                    if(typeof window.renderMarkerList === 'function') window.renderMarkerList();
+                  }
+                }catch(_){}
+              }
+              if(typeof playSeqOrder !== 'undefined') playSeqOrder = true;
+            }else{
+              // Checkbox OFF
+              if(typeof playSeqOrder !== 'undefined') playSeqOrder = false;
+            }
+            try{ if(window.usingEngine) resumeWithUpdatedLoopPreservingPhase(); }catch(_){}
+            try{ if(typeof draw === 'function') draw(); }catch(_){}
+          }catch(_){}
+        });
+      }
+
+      // Initial sync
+      updateArrangementLock();
+      // Also re-check on window focus changes (paranoid but cheap)
+      window.addEventListener('focus', updateArrangementLock);
+    }catch(e){
+      console.warn('Arrangement lock init failed:', e);
+    }
+  });
+})();
+</script>
+
 </body>
 </html>
