@@ -1,11 +1,11 @@
-<!doctype html>
+<!DOCTYPE html>
 
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
-  <title>Tommy Green's Audiolooper</title>
-  <style>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1,user-scalable=no" name="viewport"/>
+<title>Songwriters Lab</title>
+<style>
     :root{
       --bg:#0b0f14; --panel:#111827; --panel-2:#0f172a; --text:#e5e7eb; --text-dim:#9ca3af;
       --line:#1f2937; --accent:#60a5fa; --danger:#ef4444; --ok:#16a34a; --muted:#334155;
@@ -346,188 +346,464 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
   .segment .field{ flex:1 1 auto; min-width:160px; }
 }
 /* ===== End segment ===== */
+
+/* === Export Modal === */
+.modal-backdrop{
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.6);
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 100000;
+}
+.modal-card{
+  width: min(900px, 92vw);
+  max-height: 85vh;
+  display: flex; flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--muted);
+  background: linear-gradient(180deg,var(--panel),var(--panel-2));
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.55);
+}
+.modal-header{
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title{ font-weight: 800; letter-spacing:.2px; }
+.modal-body{ display:flex; }
+#exportTextArea{ width:100%; min-height: 320px; resize: vertical; }
+.modal-footer{ display:flex; justify-content:flex-end; gap:10px; }
+
+/* === Info badge (top-right of main heading) === */
+.title-wrap{ position:relative; display:flex; align-items:center; justify-content:center; }
+.info-badge{
+  position:absolute; right:0; top:50%; transform: translateY(-50%);
+  width:24px; height:24px; border-radius:999px;
+  display:inline-flex; align-items:center; justify-content:center;
+  border:1px solid rgba(96,165,250,.5);
+  background: linear-gradient(180deg,#0b1220,#0a1320);
+  box-shadow: 0 6px 16px rgba(0,0,0,.35);
+  cursor:pointer; user-select:none;
+  transition: transform .15s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.info-badge:hover{ border-color:#3b82f6; transform: translateY(-50%) scale(1.05); }
+.info-badge svg{ width:16px; height:16px; }
+/* Modal tweaks for info */
+.info-modal .modal-card{ max-width: 680px; }
+.info-modal p, .info-modal pre{ margin: 0.25rem 0; line-height: 1.5; color:#e5e7eb; }
+.info-modal .muted{ color:#9ca3af; font-size: 0.95em; }
+.info-modal a{ color:#93c5fd; text-decoration: underline; }
+
+
+
+/* === Uniform sizing for Trim toolbar + help badge === */
+#trimControls{ 
+  display: grid !important; 
+  grid-template-columns: repeat(4, 1fr) auto !important; 
+  gap: 6px !important; 
+  align-items: stretch !important;
+}
+#trimControls .btn{
+  width: 100% !important;
+  padding: 6px 10px !important;   /* equals .btn-sm */
+  font-size: 12px !important;
+  line-height: 1.1 !important;
+  border-radius: 10px !important;
+}
+/* Make sure any potential fifth '?' helper in the same row also matches */
+#trimControls button, #trimControls .btn, #trimControls .toggle{ min-height: 32px !important; }
+
+/* Slightly upscale the top-right help badge to match small-button height visually */
+.info-badge{ width: 28px !important; height: 28px !important; }
+
 </style>
+<style>
+/* === Fix: center the top-right badge vertically with the headline (keep horizontal position) === */
+.title-wrap h1 { margin: 0 !important; }      /* remove bottom-margin from h1 so container height == headline height */
+.title-wrap { margin-bottom: 16px !important; } /* keep the original spacing below the title */
+</style>
+<style>
+  /* Center the text inside the BPM input field */
+  #bpm { text-align: center; }
+</style>
+<style>
+/* === Marker Controls: small buttons + inline help badge === */
+#markerControls{
+  display: grid !important;
+  grid-template-columns: 1fr 1fr auto !important;
+  gap: 6px !important;
+  align-items: stretch !important;
+}
+#markerControls .btn{
+  width: 100% !important;
+  padding: 6px 10px !important;   /* equals .btn-sm */
+  font-size: 12px !important;
+  line-height: 1.1 !important;
+  border-radius: 10px !important;
+  min-height: 32px !important;
+}
+/* Inline help badge (question mark), same visual size as top badge but inline/static */
+.help-badge{
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(96,165,250,.5);
+  background: linear-gradient(180deg,#0b1220,#0a1320);
+  box-shadow: 0 6px 16px rgba(0,0,0,.35);
+  cursor: pointer; user-select: none;
+  transition: transform .15s ease, box-shadow .2s ease, border-color .2s ease, opacity .2s ease;
+}
+.help-badge:hover{ border-color:#3b82f6; transform: scale(1.05); }
+.help-badge svg{ width:16px; height:16px; }
+</style>
+<style>
+/* === Popup-Typografie (linke Seite) — einheitliche Schriftart & -größe === */
+/* Gilt für Info-Modal, Grid-Help/Kurzanleitung und Marker-Hilfe */
+.info-modal .modal-card,
+.help-modal .modal-card,
+#markerHelpModal .modal-card{
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Noto Sans";
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* 'pre' in diesen Popups auf Fließtext setzen (nicht monospace) */
+.info-modal pre,
+.help-modal pre,
+#markerHelpModal pre{
+  font-family: inherit;
+  font-size: 1em;
+  line-height: inherit;
+}
+
+/* Optional: Textareas innerhalb dieser Popups ebenfalls angleichen */
+.info-modal textarea,
+.help-modal textarea,
+#markerHelpModal textarea{
+  font-family: inherit;
+  font-size: 1em;
+  line-height: inherit;
+}
+</style>
+
+<style>
+/* Center "Dateiname" and "Tempo (BPM)" labels over their respective controls */
+.grid-2 > div > .label { text-align: center; }
+</style>
+
+<style>
+/* === Align Export button under "Marker übernehmen" (same right edge) === */
+.page.right .note-wrap{
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 10px 10px;
+}
+
+/* Let the toolbar's children participate in the parent grid columns */
+.page.right .note-tools{
+  display: contents !important;
+}
+
+/* Place the three toolbar items into columns 1, 2, and 3 */
+.page.right #toggleAutoscroll{ grid-column: 1; }
+.page.right #importMarkersBtn{ grid-column: 2; }
+.page.right .segment-reim-popups{ grid-column: 3; justify-self: start; }
+
+/* Lyrics list spans full width (all columns) */
+.page.right .lyricsList{ grid-column: 1 / -1; }
+
+/* Export button sits in column 2 and aligns its right edge with "Marker übernehmen" */
+.page.right .note-export{
+  grid-column: 2;
+  justify-self: end;
+  margin-top: 0;
+}
+
+/* Responsive fallback — keep a tidy two-column layout on narrow screens */
+@media (max-width: 640px){
+  .page.right .note-wrap{
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+  .page.right #toggleAutoscroll{ grid-column: 1; }
+  .page.right #importMarkersBtn{ grid-column: 2; justify-self:end; }
+  .page.right .segment-reim-popups{ grid-column: 1 / -1; }
+  .page.right .lyricsList{ grid-column: 1 / -1; }
+  .page.right .note-export{ grid-column: 2; justify-self:end; }
+}
+</style>
+
+
+<style id="editor-help-position-and-scroll-fixes">
+/* --- Move the editor '?' further right (same vertical height) --- */
+.page.right .segment-reim-popups{
+  display: flex !important;           /* allow width to stretch */
+  width: 100% !important;             /* fill the grid column */
+  justify-self: stretch !important;   /* stretch within grid cell */
+  align-items: center !important;
+}
+.page.right #editorHelp{
+  margin-left: auto !important;       /* push to the far right */
+}
+
+/* --- Editor Help Popup: make content scrollable, scrollbar always visible --- */
+#editorHelpModal .modal-card{
+  max-height: 85vh !important;        /* keep within viewport */
+  display: flex !important;
+  flex-direction: column !important;
+}
+#editorHelpModal .modal-body{
+  display: block !important;           /* allow natural block scrolling */
+  flex: 1 1 auto !important;           /* take remaining height */
+  overflow-y: scroll !important;       /* show scrollbar always */
+  scrollbar-gutter: stable both-edges; /* reserve space even when not needed */
+  padding-right: 6px;                  /* small breathing room next to gutter */
+}
+#editorHelpModal .modal-body pre{
+  margin: 0 !important;
+  white-space: pre-wrap !important;
+  font-family: inherit !important;
+}
+/* WebKit scrollbar styling (consistent with app style) */
+#editorHelpModal .modal-body::-webkit-scrollbar{ width: 10px; }
+#editorHelpModal .modal-body::-webkit-scrollbar-thumb{ background:#1f2937; border-radius: 999px; }
+#editorHelpModal .modal-body::-webkit-scrollbar-track{ background: transparent; }
+</style>
+
+
+<style id="editor-help-v2-fixes">
+/* --- Hide the bottom 'Schließen' button area in the help popup --- */
+#editorHelpModal .modal-footer,
+#editorHelpModal .modal-card-foot,
+#editorHelpModal .modal-actions,
+#editorHelpModal footer {
+  display: none !important;
+}
+
+/* --- Narrow the Reim-Popups select to fit max ~8 characters, keep left aligned --- */
+.page.right .segment-reim-popups select{
+  width: 12ch !important;          /* ~8 characters + arrow/padding */
+  max-width: 12ch !important;
+  flex: 0 0 auto !important;       /* don't stretch in flex containers */
+  text-align: left !important;     
+  text-align-last: left !important;/* left-align selected text in Chrome/Edge/Firefox */
+}
+
+/* If wrapped in a Bulma/Bootstrap select wrapper, constrain that too */
+.page.right .segment-reim-popups .select,
+.page.right .segment-reim-popups .form-select {
+  width: 12ch !important;
+  max-width: 12ch !important;
+}
+</style>
+
+
+<style>
+/* === Playback-Highlight im Markerbereich (ähnlich Editor-Zeile) === */
+#markerList .markerRow.playing{
+  border-color:#60a5fa;
+  box-shadow:0 0 0 3px rgba(59,130,246,.15) inset;
+  background:linear-gradient(180deg,#0b1220,#0a1320);
+}
+</style>
+
 </head>
-<body>  <!-- Floating Flip-Pfeile -->  <button id="toRight" class="flip-arrow right" aria-label="Zur rechten Seite wechseln" title="Zur rechten Seite wechseln">
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M9 5l7 7-7 7" stroke="#93c5fd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-  </button>
-  <button id="toLeft" class="flip-arrow left" aria-label="Zur linken Seite wechseln" title="Zur linken Seite wechseln">
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M15 5l-7 7 7 7" stroke="#93c5fd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-  </button>
-  <!-- Floating Media Controls -->
-  <div class="media-fab" aria-label="Wiedergabesteuerung">
-    <button id="floatPlay" class="fab" title="Abspielen" aria-label="Abspielen">
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M8 5v14l11-7z" fill="#93c5fd"/>
-      </svg>
-    </button>
-    <button id="floatStop" class="fab stop" title="Stop" aria-label="Stop">
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <rect x="6" y="6" width="12" height="12" rx="2" fill="#fca5a5"/>
-      </svg>
-    </button>
-  </div>
-  <div class="scene">
-    <div id="book" class="book">
-      <!-- Linke Seite (bestehende App) -->
-      <section class="page left">
-        <h1>Tommy's Audiolooper</h1>
-        <div class="card stack"><!-- Row 1: Lade/ Speichere Projekt -->
-      <div class="grid-2">
-        <label class="btn primary" for="loadProjectFile">
-          <span class="icon">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
+<body> <!-- Floating Flip-Pfeile --> <button aria-label="Zur rechten Seite wechseln" class="flip-arrow right" id="toRight" title="Zur rechten Seite wechseln">
+<svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
+<path d="M9 5l7 7-7 7" stroke="#93c5fd" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+<button aria-label="Zur linken Seite wechseln" class="flip-arrow left" id="toLeft" title="Zur linken Seite wechseln">
+<svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
+<path d="M15 5l-7 7 7 7" stroke="#93c5fd" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+<!-- Floating Media Controls -->
+<div aria-label="Wiedergabesteuerung" class="media-fab">
+<button aria-label="Abspielen" class="fab" id="floatPlay" title="Abspielen">
+<svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
+<path d="M8 5v14l11-7z" fill="#93c5fd"></path>
+</svg>
+</button>
+<button aria-label="Stop" class="fab stop" id="floatStop" title="Stop">
+<svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
+<rect fill="#fca5a5" height="12" rx="2" width="12" x="6" y="6"></rect>
+</svg>
+</button>
+</div>
+<div class="scene">
+<div class="book" id="book">
+<!-- Linke Seite (bestehende App) -->
+<section class="page left">
+<div class="title-wrap">
+<h1>Songwriters Lab</h1>
+<button aria-label="Info" class="info-badge" id="infoBadge" title="Info">
+<svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
+<!-- High-contrast info badge: solid circle with dark 'i' -->
+<circle cx="12" cy="12" fill="#93c5fd" r="10"></circle>
+<rect fill="#0b1220" height="6" rx="0.9" width="1.8" x="11.1" y="10"></rect>
+<circle cx="12" cy="7.5" fill="#0b1220" r="1.1"></circle>
+</svg>
+</button>
+</div>
+<div class="card stack"><!-- Row 1: Lade/ Speichere Projekt -->
+<div class="grid-2">
+<label class="btn primary" for="loadProjectFile">
+<span class="icon">
+<svg fill="none" viewbox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke="#93c5fd" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path></svg>
+</span>
           Lade Projekt
         </label>
-        <button id="saveProject" class="btn">
-          <span class="icon">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M17 3H7a2 2 0 0 0-2 2v14l7-3 7 3V5a2 2 0 0 0-2-2z" stroke="#93c5fd" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
+<button class="btn" id="saveProject">
+<span class="icon">
+<svg fill="none" viewbox="0 0 24 24"><path d="M17 3H7a2 2 0 0 0-2 2v14l7-3 7 3V5a2 2 0 0 0-2-2z" stroke="#93c5fd" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"></path></svg>
+</span>
           Speichere Projekt
         </button>
-        <input id="loadProjectFile" type="file" accept="application/json,.json" class="file" />
-      </div>
-
-      <!-- Row 2: Öffne Datei / Zurücksetzen -->
-      <div class="grid-2">
-        <label class="btn" for="file">
-          <span class="icon">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0l3 3m-3-3L9 7M4 20h16" stroke="#a5b4fc" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
+<input accept="application/json,.json" class="file" id="loadProjectFile" type="file"/>
+</div>
+<!-- Row 2: Öffne Datei / Zurücksetzen -->
+<div class="grid-2">
+<label class="btn" for="file">
+<span class="icon">
+<svg fill="none" viewbox="0 0 24 24"><path d="M12 16V4m0 0l3 3m-3-3L9 7M4 20h16" stroke="#a5b4fc" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"></path></svg>
+</span>
           Öffne Datei
         </label>
-        <button id="clearBtn" class="btn warn">
-          <span class="icon">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#fecaca" stroke-width="1.8" stroke-linecap="round"/></svg>
-          </span>
+<button class="btn warn" id="clearBtn">
+<span class="icon">
+<svg fill="none" viewbox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="#fecaca" stroke-linecap="round" stroke-width="1.8"></path></svg>
+</span>
           Zurücksetzen
         </button>
-        <input id="file" type="file" accept=".mp3,.wav,audio/*" class="file" />
-      </div>
-
-      <!-- Row 3: Dateiname / BPM -->
-      <div class="grid-2">
-        <div>
-          <div class="label">Dateiname</div>
-          <div class="filename-chip"><span class="dot"></span><span id="fileInfo">–</span></div>
-        </div>
-        <div>
-          <div class="label">Tempo (BPM)</div>
-          <input id="bpm" type="number" min="1" max="999" step="0.01" class="field mono" / placeholder=""/>
-  <button id="tapBpm" class="btn" style="margin-top:8px;width:100%;" title="Tippe im Takt">Tap BPM</button>
-
-        </div>
-      </div>
-
-      <!-- Waveform -->
-      <div class="section-gap"></div>
-
-      <!-- Trim Controls (neu) -->
-      <div id="trimControls" class="grid-3" style="margin-bottom:6px; display:flex; gap:6px; align-items:center; justify-content:flex-start;">
-  <button id="trimFront" class="btn btn-sm" title="Alles vor dem Cursor entfernen">Trim Front</button>
-  <button id="trimBack" class="btn btn-sm" title="Alles nach dem Cursor entfernen">Trim Back</button>
-  <button id="undoTrim" class="btn btn-sm" title="Letzten Schnitt rückgängig machen">Undo</button>
-  <button id="gridSnapBtn" class="btn btn-sm toggle active" title="Cursor am Raster einrasten">Grid Snap</button>
+<input accept=".mp3,.wav,audio/*" class="file" id="file" type="file"/>
 </div>
-      <canvas id="wave" height="240" aria-label="Wellenform"></canvas>
-      <div style="text-align:center">
-        <span class="under-time mono">Cursor: <span id="curLabel">0:00.000</span></span>
-      </div>
-      <div class="time-pitch-row" style="display:flex; align-items:center; justify-content:center; gap:14px; margin-top:8px;">
-  <div class="taktart" style="display:flex; align-items:center; gap:6px;">
-    <label for="timeSig" class="label" style="margin-right:6px;">Taktart</label>
-    <select id="timeSig" class="field" style="display:inline-block; width:auto; padding:6px 10px;">
-      <option value="4" selected>4/4</option>
-      <option value="3">3/4</option>
-    </select>
-  </div>
-  <div class="pitchCtrl" style="display:flex; align-items:center; gap:6px;">
-    <label class="label" title="Tonart ± Oktaven">Pitch</label>
-    <button id="pitchMinus" class="btn" style="padding:6px 10px;" title="Oktave runter">–</button>
-    <div id="pitchVal" class="mono" style="min-width:1.5em; text-align:center;">0</div>
-    <button id="pitchPlus" class="btn" style="padding:6px 10px;" title="Oktave hoch">+</button>
-  </div>
+<div class="section-gap"></div>
+<!-- Row 3: Dateiname / BPM -->
+<div class="grid-2">
+<div>
+<div class="label">Dateiname</div>
+<div class="filename-chip"><span class="dot"></span><span id="fileInfo">–</span></div>
 </div>
-
-
-      <!-- Marker setzen / entfernen -->
-      <div class="v-gap"></div>
-      <div class="grid-2">
-        <button id="addMarker" class="btn ok">
-          <span class="icon">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#86efac" stroke-width="1.8" stroke-linecap="round"/></svg>
-          </span>
-          Marker setzen
-        </button>
-        <button id="deleteMarker" class="btn warn">
-          <span class="icon">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#fecaca" stroke-width="1.8" stroke-linecap="round"/></svg>
-          </span>
-          Marker entfernen
-        </button>
-      </div>
-
-      <!-- Großer Play / Stop -->
-      <div class="v-gap"></div>
-      <div class="grid-2">
-        <button id="playSel" class="btn big primary">
-          <span class="icon play"><svg viewBox="0 0 24 24" fill="#93c5fd"><path d="M8 5v14l11-7z"/></svg></span>
+<div>
+<div class="label">Tempo (BPM)</div>
+<input class="field mono" id="bpm" max="999" min="1" placeholder="" step="0.01" type="number"/>
+<button class="btn" id="tapBpm" style="margin-top:8px;width:100%;" title="Tippe im Takt">Tap BPM</button>
+</div>
+</div>
+<!-- Waveform -->
+<div class="section-gap"></div>
+<!-- Trim Controls (neu) -->
+<div class="grid-3" id="trimControls" style="margin-bottom:6px; display:flex; gap:6px; align-items:center; justify-content:flex-start;">
+<button class="btn btn-sm" id="trimFront" title="Alles vor dem Cursor entfernen">Trim Front</button>
+<button class="btn btn-sm" id="trimBack" title="Alles nach dem Cursor entfernen">Trim Back</button>
+<button class="btn btn-sm" id="undoTrim" title="Letzten Schnitt rückgängig machen">Undo</button>
+<button class="btn btn-sm toggle active" id="gridSnapBtn" title="Cursor am Raster einrasten">Grid Snap</button>
+</div>
+<canvas aria-label="Wellenform" height="240" id="wave"></canvas>
+<div style="text-align:center">
+<span class="under-time mono">Cursor: <span id="curLabel">0:00.000</span></span>
+</div>
+<div class="time-pitch-row" style="display:flex; align-items:center; justify-content:center; gap:14px; margin-top:8px;">
+<div class="taktart" style="display:flex; align-items:center; gap:6px;">
+<label class="label" for="timeSig" style="margin-right:6px;">Taktart</label>
+<select class="field" id="timeSig" style="display:inline-block; width:auto; padding:6px 10px;">
+<option selected="" value="4">4/4</option>
+<option value="3">3/4</option>
+</select>
+</div>
+<div class="pitchCtrl" style="display:flex; align-items:center; gap:6px;">
+<label class="label" title="Tonart ± Oktaven">Pitch</label>
+<button class="btn" id="pitchMinus" style="padding:6px 10px;" title="Oktave runter">–</button>
+<div class="mono" id="pitchVal" style="min-width:1.5em; text-align:center;">0</div>
+<button class="btn" id="pitchPlus" style="padding:6px 10px;" title="Oktave hoch">+</button>
+</div>
+</div>
+<!-- Marker setzen / entfernen -->
+<div class="v-gap"></div>
+<div id="markerControls">
+<button class="btn btn-sm ok" id="addMarker" title="Marker am Cursor setzen">
+<span class="icon">
+<svg fill="none" viewbox="0 0 24 24">
+<path d="M12 5v14M5 12h14" stroke="#86efac" stroke-linecap="round" stroke-width="1.8"></path>
+</svg>
+</span>
+    Marker setzen
+  </button>
+<button class="btn btn-sm warn" id="deleteMarker" title="Marker am Cursor entfernen">
+<span class="icon">
+<svg fill="none" viewbox="0 0 24 24">
+<path d="M6 6l12 12M18 6L6 18" stroke="#fecaca" stroke-linecap="round" stroke-width="1.8"></path>
+</svg>
+</span>
+    Marker entfernen
+  </button>
+<button aria-label="Hilfe zu Markern &amp; Loop" class="help-badge" id="markerHelp" title="Hilfe">
+<svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
+<circle cx="12" cy="12" fill="#93c5fd" r="10"></circle>
+<path d="M9.6 9.3a2.4 2.4 0 1 1 3.9 1.8c-.8.6-1.2 1-1.2 2" stroke="#0b1220" stroke-linecap="round" stroke-width="1.8"></path>
+<circle cx="12" cy="16.6" fill="#0b1220" r="1.1"></circle>
+</svg>
+</button>
+</div>
+<div class="v-gap"></div>
+<div class="card" id="markerSeqControls" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px;" toggle"=""><div class="seq-left" style="display:flex; align-items:center; gap:10px; cursor:pointer;"><input id="playSeqToggle" style="width:18px;height:18px; accent-color:#60a5fa; cursor:pointer;" type="checkbox"/><span>Custom Arrangement</span></div><button aria-label="Hilfe zu Custom Arrangement" class="help-badge" id="seqHelp" title="Hilfe">
+<svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
+<circle cx="12" cy="12" fill="#93c5fd" r="10"></circle>
+<path d="M9.6 9.3a2.4 2.4 0 1 1 3.9 1.8c-.8.6-1.2 1-1.2 2" stroke="#0b1220" stroke-linecap="round" stroke-width="1.8"></path>
+<circle cx="12" cy="16.6" fill="#0b1220" r="1.1"></circle>
+</svg>
+</button></div>
+<div class="v-gap"></div>
+<div class="markerList" id="markerList"></div>
+<!-- Großer Play / Stop -->
+<div class="v-gap"></div>
+<div class="grid-2">
+<button class="btn big primary" id="playSel">
+<span class="icon play"><svg fill="#93c5fd" viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></span>
           Abspielen
         </button>
-        <button id="pauseBtn" class="btn big">
-          <span class="icon stop"><svg viewBox="0 0 24 24" fill="#fca5a5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></span>
+<button class="btn big" id="pauseBtn">
+<span class="icon stop"><svg fill="#fca5a5" viewbox="0 0 24 24"><rect height="12" rx="2" width="12" x="6" y="6"></rect></svg></span>
           Stop
         </button>
-      </div>
-
-      <!-- Marker-Liste -->
-      <div style=\"height:1cm\"></div>
-
-<!-- NEU: Reihenfolge-Schalter -->
-<div id="markerSeqControls" class="card" style="margin-top:0; padding:10px; margin-bottom:10px; display:flex; align-items:center; gap:10px;>
-  <label class="btn toggle" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
-    <input id="playSeqToggle" type="checkbox" style="width:18px;height:18px; accent-color:#60a5fa; cursor:pointer;" />
-    <span>Custom Arrangement</span>
-  </label>
-  <div id="seqInfo" class="label" style="margin:0; opacity:.9;">Sortiere Marker per Drag and Drop. Bei Aktivierung wird diese Reihenfolge gespielt.</div>
 </div>
-
-<div id="markerList" class="markerList"></div>
-
-      <input id="loadAudioForProject" type="file" accept=".mp3,.wav,audio/*" class="file" />
-    </div>
-  </section>
-
-  <!-- Rechte Seite: Texteditor gekoppelt an 2-Takt-Gruppen -->
-  <section class="page right">
-    <h1>Tommy's Notebook</h1>
-    <div class="card note-wrap">
-      <div class="note-tools">
-        <button id="toggleAutoscroll" class="btn toggle" title="Automatisches Scrollen ein/aus">Autoscroll: An</button>
-        <button id="importMarkersBtn" class="btn toggle" title="Marker in Editor übernehmen">Marker übernehmen</button>
-      
-        <div class="segment segment-reim-popups"><label class="label" style="margin-left:8px;">Reim-Popups</label>
-        <select id="rhymeMode" class="field" style="display:inline-block; width:auto; padding:8px 10px;">
-          <option value="off" selected>Aus</option>
-          <option value="de">Deutsch</option>
-          <option value="en">Englisch</option>
-        </select></div>
-      </div>
-
-      <div class="lyricsList" id="lyricsList"></div>
-        <div class="note-export">
-          <button id="exportTxtBtn" class="btn">Export</button>
-        </div>
-    </div>
-  </section>
+<!-- Marker-Liste -->
+<!-- NEU: Reihenfolge-Schalter --><input accept=".mp3,.wav,audio/*" class="file" id="loadAudioForProject" type="file"/>
 </div>
-
-  </div>  <!-- ---------- Bisheriges Skript + Flip-Logik ---------- -->  <script>
+</section>
+<!-- Rechte Seite: Texteditor gekoppelt an 2-Takt-Gruppen -->
+<section class="page right">
+<h1>Songwriters Editor</h1>
+<div class="card note-wrap">
+<div class="note-tools">
+<button class="btn toggle" id="toggleAutoscroll" title="Automatisches Scrollen ein/aus">Autoscroll: An</button>
+<button class="btn toggle" id="importMarkersBtn" title="Marker in Editor übernehmen">Marker übernehmen</button>
+<div class="segment segment-reim-popups"><label class="label" style="margin-left:8px;">Reim-Popups</label>
+<select class="field" id="rhymeMode" style="display:inline-block; width:auto; padding:8px 10px;">
+<option selected="" value="off">Aus</option>
+<option value="de">Deutsch</option>
+<option value="en">Englisch</option>
+</select><button aria-label="Hilfe zum Songwriters Editor" class="help-badge" id="editorHelp" title="Hilfe">
+  <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="#93c5fd"></circle>
+    <path d="M9.6 9.3a2.4 2.4 0 1 1 3.9 1.8c-.8.6-1.2 1-1.2 2" stroke="#0b1220" stroke-linecap="round" stroke-width="1.8"></path>
+    <circle cx="12" cy="16.6" r="1.1" fill="#0b1220"></circle>
+  </svg>
+</button></div>
+</div>
+<div class="lyricsList" id="lyricsList"></div>
+<div class="note-export">
+<button class="btn" id="exportTxtBtn">Export</button>
+</div>
+</div>
+</section>
+</div>
+</div> <!-- ---------- Bisheriges Skript + Flip-Logik ---------- --> <script>
     /* Flip-Steuerung (neue, isolierte Logik) */
     const book = document.getElementById('book');
     const toRight = document.getElementById('toRight');
@@ -550,7 +826,7 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
     window.addEventListener('keydown', (e)=>{
       if(e.key === 'Escape' && book.classList.contains('flipped')) showLeft();
     });
-  </script>  <script>
+  </script> <script>
     // --- DOM ---
     const fileInput = document.getElementById('file');
     const clearBtn = document.getElementById('clearBtn');
@@ -1642,7 +1918,16 @@ function ensureDefaultStartEndMarkers() {
           ctx.strokeStyle=color; ctx.beginPath();
           if(labelTop){ ctx.moveTo(x, ly+h); ctx.lineTo(x, waveTop); } else { ctx.moveTo(x, ly); ctx.lineTo(x, waveBottom); }
           ctx.stroke();
-          renderHit.set(m.id, { x, labelRect:{x:lx,y:ly,w,h} });
+          const __HIT_PAD = 8;
+const __LINE_HIT_W = 22;
+const __lineRectY = topLabelY;
+const __lineRectH = (bottomLabelY + LABEL_H) - __lineRectY;
+renderHit.set(m.id, {
+  x,
+  labelRect: { x: lx, y: ly, w, h },
+  lineRect: { x: Math.max(0, x - __LINE_HIT_W/2), y: __lineRectY, w: __LINE_HIT_W, h: __lineRectH },
+  pad: __HIT_PAD
+});
         });
       }
 
@@ -1673,15 +1958,19 @@ function ensureDefaultStartEndMarkers() {
 
     // --- Interaktion (Drag Cursor / Pan / Pinch) + Marker UI ---
     function hitMarkerLabel(ev){
-      const rect = wave.getBoundingClientRect();
-      const px = ev.clientX - rect.left, py = ev.clientY - rect.top;
-      for(const m of markers){
-        const hit = renderHit.get(m.id); if(!hit) continue;
-        const r = hit.labelRect;
-        if(px>=r.x && px<=r.x+r.w && py>=r.y && py<=r.y+r.h) return m;
-      }
-      return null;
-    }
+  const rect = wave.getBoundingClientRect();
+  const px = ev.clientX - rect.left, py = ev.clientY - rect.top;
+  for(const m of markers){
+    const hit = renderHit.get(m.id); if(!hit) continue;
+    const pad = Number.isFinite(hit.pad) ? hit.pad : 0;
+    const r = hit.labelRect;
+    const inLabel = (px >= (r.x - pad) && px <= (r.x + r.w + pad) && py >= (r.y - pad) && py <= (r.y + r.h + pad));
+    const lr = hit.lineRect;
+    const inLine = lr && (px >= lr.x && px <= (lr.x + lr.w) && py >= lr.y && py <= (lr.y + lr.h));
+    if(inLabel || inLine) return m;
+  }
+  return null;
+}
 
     wave.addEventListener('pointerdown', (ev)=>{
       if(duration<=0) return;
@@ -2393,6 +2682,43 @@ ensureDefaultStartEndMarkers();
 
     
     // --- Export TXT ---
+// --- Export (Popup) ---
+function buildExportPopupText(){
+  const { lines } = computeCounts();
+  const bl = barLen();
+  const headers = [];
+  if (isFinite(bl) && bl > 0) {
+    (markers||[])
+      .filter(m => (m.label || '').trim().length > 0 && m.pin!=='start' && m.pin!=='end' && m.playlistClone !== true)
+      .forEach(m => {
+        const barNumber = Math.floor((m.time + EPS) / bl) + 1; // 1-basiert
+        const lineIdx   = Math.floor((barNumber - 1) / 2) + 1; // 2 Takte pro Zeile
+        headers.push({ lineIdx, label: m.label.trim(), bar: barNumber });
+      });
+    headers.sort((a,b)=> a.lineIdx - b.lineIdx || a.bar - b.bar);
+  }
+  const headersByLine = new Map();
+  headers.forEach(h=>{
+    if(h.lineIdx>=1 && h.lineIdx<=lines){
+      if(!headersByLine.has(h.lineIdx)) headersByLine.set(h.lineIdx, []);
+      headersByLine.get(h.lineIdx).push(h.label);
+    }
+  });
+
+  const out = [];
+  for (let i=0;i<lines;i++){
+    const hs = headersByLine.get(i+1) || [];
+    // two empty lines before and after each segment header
+    hs.forEach(lbl => {
+      out.push("");
+      out.push(lbl);
+      out.push("");
+    });
+    out.push(lyrics[i] || "");
+  }
+  return out.join("\n");
+}
+
     function buildExportText(){
       const { lines } = computeCounts();
 
@@ -2435,14 +2761,76 @@ ensureDefaultStartEndMarkers();
       setTimeout(()=>URL.revokeObjectURL(url), 1500);
     }
 
-    exportTxtBtn?.addEventListener('click', ()=>{
-      const base = (loadedFileMeta && loadedFileMeta.name
-                   ? loadedFileMeta.name.replace(/\.[^.]+$/, '')
-                   : 'lyrics');
-      const filename = `${base}_lyrics.txt`;
-      const content  = buildExportText();
-      downloadText(filename, content);
-    });
+    
+exportTxtBtn?.addEventListener('click', ()=>{
+  try{
+    const modal = document.getElementById('exportModal');
+    const ta = document.getElementById('exportTextArea');
+    if(!modal || !ta){ alert('Popup konnte nicht geöffnet werden.'); return; }
+    ta.value = buildExportPopupText();
+    modal.style.display = 'flex';
+    ta.focus(); ta.select();
+  }catch(e){
+    console.warn(e);
+  }
+});
+
+
+
+// Modal controls (delegated & timing-safe)
+document.addEventListener('click', async (e) => {
+  const modal = document.getElementById('exportModal');
+  const ta = document.getElementById('exportTextArea');
+
+  // Close if click on backdrop
+  if (modal && e.target === modal) {
+    modal.style.display = 'none';
+  }
+
+  // Close button
+  if (e.target && e.target.id === 'closeExportModal') {
+    if (modal) modal.style.display = 'none';
+  }
+
+  // Copy button
+  if (e.target && e.target.id === 'copyExportText') {
+    if (!ta) return;
+    try {
+      // ensure selection is applied
+      ta.focus();
+      ta.select();
+      // navigator.clipboard first
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(ta.value);
+      } else {
+        // fallback: execCommand
+        const ok = document.execCommand('copy');
+        if (!ok) throw new Error('execCommand failed');
+      }
+      e.target.textContent = 'Kopiert!';
+      setTimeout(()=>{ e.target.textContent = 'Alles kopieren'; }, 1200);
+    } catch (err) {
+      console.warn('Copy failed', err);
+      // last-resort fallback: temporary textarea
+      try {
+        const temp = document.createElement('textarea');
+        temp.value = ta.value;
+        temp.style.position = 'fixed';
+        temp.style.opacity = '0';
+        document.body.appendChild(temp);
+        temp.focus();
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+        e.target.textContent = 'Kopiert!';
+        setTimeout(()=>{ e.target.textContent = 'Alles kopieren'; }, 1200);
+      } catch (_) {
+        alert('Kopieren konnte nicht durchgeführt werden.');
+      }
+    }
+  }
+});
+
 // --- Init ---
     window.addEventListener('resize', ()=>{ draw(); });
     ensureListOrder(); renderMarkerList(); draw();
@@ -2907,7 +3295,6 @@ function firstPlayableId(){
 })();
 </script>
 <!-- ===== Ende Loop-Fix Patch ===== -->
-
 <!-- ===== Playlist-Dominanz & Jump-Guard Patch ===== -->
 <script>
 (function(){
@@ -2994,7 +3381,6 @@ function firstPlayableId(){
 })();
 </script>
 <!-- ===== Ende Playlist-Dominanz & Jump-Guard Patch ===== -->
-
 <script>
 /* ===== Save Patch: persist seqReps on markers ===== */
 (function(){
@@ -3020,18 +3406,15 @@ function firstPlayableId(){
   }catch(_){}
 })();
 </script>
-
-
-  <!-- === Rhyme popover for editor lines === -->
-  <div id="rhyme-popover" role="dialog" aria-live="polite" style="position: fixed; z-index: 99999; display:none; max-width: 360px; background:#0b1220; border:1px solid #334155; border-radius:12px; box-shadow:0 12px 36px rgba(0,0,0,.55); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow:hidden;">
-    <div id="rhyme-popover-header" style="padding:10px 12px; font-weight:700; border-bottom:1px solid #1f2937; color:#dbeafe;">Reime</div>
-    <div id="rhyme-popover-body" style="max-height: 280px; overflow:auto; background:#0c1423;"></div>
-    <div style="padding:8px 12px; border-top:1px solid #1f2937; font-size:12px; color:#94a3b8;">
-      Rhymes by <a href="https://rhymebrain.com" target="_blank" rel="noopener">RhymeBrain</a>
-    </div>
-  </div>
-
-  <script>
+<!-- === Rhyme popover for editor lines === -->
+<div aria-live="polite" id="rhyme-popover" role="dialog" style="position: fixed; z-index: 99999; display:none; max-width: 360px; background:#0b1220; border:1px solid #334155; border-radius:12px; box-shadow:0 12px 36px rgba(0,0,0,.55); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow:hidden;">
+<div id="rhyme-popover-header" style="padding:10px 12px; font-weight:700; border-bottom:1px solid #1f2937; color:#dbeafe;">Reime</div>
+<div id="rhyme-popover-body" style="max-height: 280px; overflow:auto; background:#0c1423;"></div>
+<div style="padding:8px 12px; border-top:1px solid #1f2937; font-size:12px; color:#94a3b8;">
+      Rhymes by <a href="https://rhymebrain.com" rel="noopener" target="_blank">RhymeBrain</a>
+</div>
+</div>
+<script>
   (function(){
     // Scope-safe; don't rely on globals from other scripts
     const lyricsListEl = document.getElementById('lyricsList');
@@ -3234,8 +3617,6 @@ function firstPlayableId(){
     window.addEventListener('resize', hidePopover);
   })();
   </script>
-    
-
 <!-- === Injection: Auto-disable "Custom Arrangement" when 2 markers are active === -->
 <script>
 (function(){
@@ -3333,6 +3714,456 @@ function firstPlayableId(){
       console.warn('Arrangement lock init failed:', e);
     }
   });
+})();
+</script>
+<!-- === Export Popup (Modal) === -->
+<div class="modal-backdrop" id="exportModal" style="display:none;">
+<div class="modal-card">
+<div class="modal-header">
+<div class="modal-title">Exportierter Text</div>
+<button class="btn btn-sm" id="closeExportModal" title="Schließen">Schließen</button>
+</div>
+<div class="modal-body">
+<textarea class="field mono" id="exportTextArea" readonly="" rows="16"></textarea>
+</div>
+<div class="modal-footer">
+  <button class="btn" id="copyExportText" title="In die Zwischenablage kopieren">Alles kopieren</button>
+</div>
+
+</div>
+</div>
+<!-- Info Modal -->
+<div aria-labelledby="infoTitle" aria-modal="true" class="modal-backdrop info-modal" id="infoModal" role="dialog" style="display:none;">
+<div class="modal-card">
+<div class="modal-header">
+<div class="modal-title" id="infoTitle"></div>
+<button aria-label="Schließen" title="Schließen" class="btn btn-sm" id="infoClose">Schließen</button>
+</div>
+<div class="modal-body" style="display:block;">
+<div>
+<p><strong>Songwriters Lab</strong></p><br/>
+<p class="muted">© 2025 Tom Ottow. Alle Rechte vorbehalten.</p><br/>
+<p>Diese App verarbeitet grundsätzlich alle Daten lokal auf Ihrem Gerät.</p>
+<p>Bei Nutzung der Reimfunktion werden eingegebene Wörter an den externen Dienst
+        <a href="https://rhymebrain.com" rel="noopener noreferrer" target="_blank">RhymeBrain</a>
+        übermittelt, um passende Reimvorschläge zu erhalten.</p>
+<p>Es werden keine weiteren personenbezogenen Daten übertragen.</p>
+</div>
+</div>
+</div>
+</div>
+<script>
+(function(){
+  const badge = document.getElementById('infoBadge');
+  const modal = document.getElementById('infoModal');
+  const closeBtn = document.getElementById('infoClose');
+  const okBtn = document.getElementById('infoOk');
+
+  function openModal(){
+    if(!modal) return;
+    modal.style.display = 'flex';
+    // focus close for accessibility
+    try{ closeBtn && closeBtn.focus(); }catch(_){}
+    document.addEventListener('keydown', onKey);
+  }
+  function closeModal(){
+    if(!modal) return;
+    modal.style.display = 'none';
+    document.removeEventListener('keydown', onKey);
+  }
+  function onKey(e){
+    if(e.key === 'Escape'){ closeModal(); }
+  }
+
+  badge && badge.addEventListener('click', openModal);
+  closeBtn && closeBtn.addEventListener('click', closeModal);
+  okBtn && okBtn.addEventListener('click', closeModal);
+  // backdrop click
+  modal && modal.addEventListener('click', (e)=>{
+    if(e.target === modal) closeModal();
+  });
+})();
+</script>
+<!-- === Injected: Grid Help "?" + Popup (adjusted) === -->
+<style id="grid-help-styles">
+  .qs-btn{
+    width: 32px; height: 32px;
+    padding: 0; margin-left: 6px;
+    border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 0;
+    line-height: 0;
+    background: linear-gradient(180deg,#0b1220,#0a1320);
+    border: 1px solid var(--muted);
+    cursor: pointer;
+  }
+  .qs-btn:hover{ border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,.12) inset; }
+  .qs-btn svg{ width: 20px; height: 20px; }
+  .help-modal .modal-card{ max-width: 560px; }
+  .help-modal pre{ margin: 0.25rem 0; line-height: 1.5; white-space: pre-wrap; }
+</style>
+<style id="trim-help-badge-match">
+  /* Keep the Trim-row '?' identical to the marker help-badge */
+  #trimControls .help-badge{
+    width: 28px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    padding: 0 !important;
+    justify-self: start;
+  }
+</style>
+<script>
+(function(){
+  function makeQSvg(){
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx","12"); circle.setAttribute("cy","12"); circle.setAttribute("r","10");
+    circle.setAttribute("fill","#93c5fd");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d","M9.6 9.3a2.4 2.4 0 1 1 3.9 1.8c-.8.6-1.2 1-1.2 2");
+    path.setAttribute("stroke","#0b1220"); path.setAttribute("stroke-width","1.8"); path.setAttribute("stroke-linecap","round");
+    const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    dot.setAttribute("cx","12"); dot.setAttribute("cy","16.6"); dot.setAttribute("r","1.1"); dot.setAttribute("fill","#0b1220");
+    svg.appendChild(circle); svg.appendChild(path); svg.appendChild(dot);
+    return svg;
+  }
+
+  function ensureHelpModal(){
+    if(document.getElementById("helpModal")) return document.getElementById("helpModal");
+    const modal = document.createElement("div");
+    modal.id = "helpModal";
+    modal.className = "modal-backdrop info-modal help-modal";
+    modal.style.display = "none";
+    modal.innerHTML = `
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+        <div class="modal-header">
+          <div id="helpTitle" class="modal-title">Waveform</div>
+          <button id="helpClose" class="btn btn-sm" aria-label="Schließen">Schließen</button>
+        </div>
+        <div class="modal-body">
+          <pre>
+Lade deine Audiodatei und bestimme BPM Tempo und Taktart. 
+
+Verschiebe den Cursor per Drag & Drop, oder mit Taps in der Timeline. 
+
+Zoome und scrolle mit Fingergesten. 
+
+Kürze leere Stellen am Anfang oder Ende mit den Trim Buttons.
+
+Deaktiviere die Snap Grid Magnetfunktion für mehr Präzision.
+          </pre>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    function close(){ modal.style.display = "none"; }
+    modal.addEventListener("click", (e)=>{ if(e.target === modal) close(); });
+    document.addEventListener("keydown", (e)=>{ if(e.key === "Escape") close(); });
+    modal.querySelector("#helpClose").addEventListener("click", close);
+    return modal;
+  }
+
+  function init(){
+    const snap = document.getElementById("gridSnapBtn");
+    if(!snap) return;
+    const btn = document.createElement("button");
+    btn.id = "gridHelp";
+    btn.className = "help-badge";
+    btn.title = "Kurzanleitung";
+    btn.setAttribute("aria-label","Kurzanleitung");
+    btn.appendChild(makeQSvg());
+    snap.insertAdjacentElement("afterend", btn);
+
+    const modal = ensureHelpModal();
+    btn.addEventListener("click", ()=> { modal.style.display = "flex"; });
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", init);
+  }else{
+    init();
+  }
+})();
+</script>
+<!-- === End Injected === -->
+<!-- Marker Help Modal -->
+<div aria-labelledby="markerHelpTitle" aria-modal="true" class="modal-backdrop info-modal" id="markerHelpModal" role="dialog" style="display:none;">
+<div class="modal-card">
+<div class="modal-header">
+<div class="modal-title" id="markerHelpTitle">Marker &amp; Loops</div>
+<button class="btn btn-sm" id="markerHelpClose" title="Schließen">Schließen</button>
+</div>
+<div class="modal-body">
+<pre style="white-space: pre-wrap; font-family: inherit;">Du schreibst gerade deinen Song und willst nur diesen einen Abschnitt fertig kriegen, aber ständig musst du im Player wieder hin- und herspulen? Loope ihn doch einfach! 
+
+Erstelle so viele Marker wie du willst und verschiebe sie per Drag &amp; Drop. 
+
+Richte sie mit der Snap Grid Magnetfunktion aus, für absolut saubere Loops. 
+
+Benenne die Marker frei, für einen perfekten Überblick im Arrangement. Tippe sie doppelt an, um sie umzubenennen.
+
+Aktiviere und deaktiviere Marker mit Antippen. Zwei rote Marker ergeben einen Loop. 
+
+Ein aktivierter Loop deaktiviert automatisch ein Custom Arrangement.</pre>
+</div>
+</div>
+</div>
+<script>
+(function(){
+  const modal = document.getElementById('markerHelpModal');
+  const openBtn = document.getElementById('markerHelp');
+  const close1 = document.getElementById('markerHelpClose');
+  const close2 = document.getElementById('markerHelpClose2');
+  function open(){ if(modal) modal.style.display='flex'; }
+  function close(){ if(modal) modal.style.display='none'; }
+  openBtn && openBtn.addEventListener('click', open);
+  close1 && close1.addEventListener('click', close);
+  close2 && close2.addEventListener('click', close);
+  modal && modal.addEventListener('click', (e)=>{ if(e.target===modal) close(); });
+})();
+</script>
+<div class="modal-backdrop help-modal" id="seqHelpModal"><div class="modal-card"><div class="modal-header"><div class="modal-title">Custom Arrangements</div><button aria-label="Schließen" title="Schließen" class="btn btn-sm btn-close" type="button">Schließen</button></div><div class="modal-body"><pre>Dein Instrumental hat nur einen Refrain am Ende, doch in deinem Kopf klingen zwei besser? Dafür magst du den Anfang der ersten Strophe nicht, die eine schöne Stelle in der zweiten Strophe könnte jedoch doppelt so lang sein? Und wenn doch nur dieser Zwischenteil vor dem Refrain und nicht danach kommen würde… Kein Problem! 
+
+Aktiviere das Custom Arrangement und ordne die Abschnitte deiner Markerbereiche per Drag &amp; Drop neu an. 
+
+Kopiere deine Abschnitte beliebig oft und puzzle dir deinen ultimativen Beat. 
+
+Mute Bereiche, die dir nicht gefallen. Diese werden beim Abspielen komplett ausgelassen. 
+
+Ein aktiviertes Custom Arrangement deaktiviert Loops automatisch.</pre></div></div></div><script>
+(function(){
+  const btn = document.getElementById('seqHelp');
+  const modal = document.getElementById('seqHelpModal');
+
+  function openModal(){
+    if(!modal) return;
+    modal.style.display = 'flex';
+  }
+  function closeModal(){
+    if(!modal) return;
+    modal.style.display = 'none';
+  }
+
+  if(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      openModal();
+    });
+  }
+  if(modal){
+    modal.addEventListener('click', function(e){
+      // Click on backdrop closes; ignore clicks inside the card
+      const card = modal.querySelector('.modal-card');
+      if(!card || !card.contains(e.target)) closeModal();
+    });
+  }
+  // ESC to close
+  window.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){
+      closeModal();
+    }
+  });
+
+  // Close button inside modal header
+  if(modal){
+    const cbtn = modal.querySelector('.modal-close, .btn-close');
+    if(cbtn){
+      cbtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        closeModal();
+      });
+    }
+  }
+
+})();
+</script>
+<!-- Editor Help Modal -->
+<div class="modal-backdrop help-modal" id="editorHelpModal" role="dialog" aria-modal="true" aria-labelledby="editorHelpTitle" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="editorHelpTitle">Songwriters Editor</div>
+      <button class="btn btn-sm" id="editorHelpClose" title="Schließen">Schließen</button>
+    </div>
+    <div class="modal-body">
+      <pre style="white-space: pre-wrap; font-family: inherit;">Mit dem Songwriters Editor hast du deine Lyrics voll im Griff - und vor allem im Blick!
+
+Der Editor berechnet automatisch, wie viele Zeilen du schreiben musst und zeigt dir jederzeit, an welcher Stelle deines Songs du dich gerade befindest. 
+
+Der Button “Marker übernehmen” richtet dein Textarrangement genau nach deinem Instrumental aus. 
+
+Mit der Autoscroll-Funktion bleibst du auch bei laufendem Playback immer auf die passende Textzeile fokussiert. 
+
+Du willst deinen gesamten Loop oder dein Custom Arrangement gerade nicht ändern, aber doch kurz einen anderen Abschnitt loopen? Halte die Zahl einer Textzeile gedrückt, zwei rote Zahlen ergeben einen Quick Loop. Halte erneut eine der beiden Zahlen gedrückt, um den Quick Loop zu beenden. 
+
+Oder tippe einmal kurz auf die Zahl einer Zeile, um mit der Wiedergabe sofort an diesen Punkt zu springen. 
+
+Es fehlt dir gerade noch der passende Reim für eine Zeile? Aktiviere die RhymeBrain Integration und tippe auf ein Wort deiner Lyrics, um Vorschläge zu erhalten! 
+
+Deine fertigen Lyrics kannst du dir mit dem Export Button vollständig anzeigen und in die Zwischenablage kopieren lassen!</pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-sm btn-close" id="editorHelpClose2" title="Schließen" type="button">Schließen</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const btn = document.getElementById('editorHelp');
+  const modal = document.getElementById('editorHelpModal');
+  const close1 = document.getElementById('editorHelpClose');
+  const close2 = document.getElementById('editorHelpClose2');
+  function open(){ if(modal) modal.style.display = 'flex'; }
+  function close(){ if(modal) modal.style.display = 'none'; }
+  btn && btn.addEventListener('click', open);
+  close1 && close1.addEventListener('click', close);
+  close2 && close2.addEventListener('click', close);
+  modal && modal.addEventListener('click', (e)=>{ if(e.target === modal) close(); });
+})();
+</script>
+
+<script id="editor-help-v2-script">
+document.addEventListener('DOMContentLoaded', function(){
+  // Remove bottom "Schließen" buttons specifically (keep top X intact)
+  const modal = document.querySelector('#editorHelpModal');
+  if(modal){
+    const candidates = modal.querySelectorAll('.modal-footer button, .modal-card-foot button, .modal-actions button, footer button, .modal-footer a, .modal-card-foot a, .modal-actions a, footer a');
+    candidates.forEach(el=>{
+      const txt = (el.textContent || '').trim().toLowerCase();
+      if (txt === 'schließen' || txt === 'schliessen' || txt === 'close'){
+        el.remove();
+      }
+    });
+  }
+});
+</script>
+
+
+<!-- === Double‑Tap Stop → Smart Home (Loop‑aware) === -->
+<script>
+(function(){
+  function moveCursorSmartHome(){
+    try {
+      // Default: go to absolute start (0:00)
+      let target = 0;
+      try{
+        if (typeof getLoopRegion === 'function'){
+          const r = getLoopRegion();
+          const loopActive = r && r.mode && r.mode !== 'full' && Number.isFinite(r.s);
+          if(loopActive) target = Math.max(0, +r.s || 0); // jump to loop start if a loop is active
+        }
+      }catch(_){}
+
+      if (typeof setCursor === 'function') { setCursor(target, true); }
+      else {
+        window.cursorTime = target;
+        if (window.curLabel && typeof formatTime==='function') curLabel.textContent = formatTime(target);
+      }
+      if (typeof updateLyricsHighlight === 'function') updateLyricsHighlight(target);
+      if (typeof draw === 'function') draw();
+    } catch(_) {}
+  }
+  function wireDoubleTapToStop(btn){
+    if(!btn) return;
+    // Desktop: klassisches Doppelklicken
+    btn.addEventListener('dblclick', function(e){
+      try{ e.preventDefault(); e.stopPropagation(); }catch(_){}
+      try{ if (typeof stopEngine === 'function') stopEngine(); }catch(_){}
+      moveCursorSmartHome();
+    });
+    // Touch: Double‑Tap Erkennung via Pointer Events
+    let lastTap = 0;
+    btn.addEventListener('pointerdown', function(e){
+      const now = (window.performance && performance.now) ? performance.now() : Date.now();
+      const dt = now - lastTap;
+      lastTap = now;
+      if (dt > 0 && dt < 320){ // ~0.32s Double‑Tap Fenster
+        try{ e.preventDefault(); e.stopPropagation(); }catch(_){}
+        try{ if (typeof stopEngine === 'function') stopEngine(); }catch(_){}
+        moveCursorSmartHome();
+      }
+    }, { passive:false });
+  }
+  // Beide Stop-Buttons verkabeln
+  wireDoubleTapToStop(document.getElementById('pauseBtn'));
+  wireDoubleTapToStop(document.getElementById('floatStop'));
+})();
+</script>
+
+<!-- === Injection: Marker-Playback-Highlight (Outline aktuell spielendes Segment) === -->
+<script>
+(function(){
+  let lastPlayingMarkerId = null;
+
+  function setActiveMarkerRowById(id){
+    try{
+      const list = document.getElementById('markerList');
+      if(!list) return;
+      const prev = list.querySelector('.markerRow.playing');
+      if(prev) prev.classList.remove('playing');
+      lastPlayingMarkerId = null;
+      if(!id) return;
+      const sel = '.markerRow[data-id="' + CSS.escape(String(id)) + '"]';
+      const row = list.querySelector(sel);
+      if(row){ row.classList.add('playing'); lastPlayingMarkerId = id; }
+    }catch(_){}
+  }
+
+  function currentSegmentStartId(t){
+    try{
+      if (typeof playSeqOrder!=='undefined' && playSeqOrder && typeof seqCurrentStartId!=='undefined' && seqCurrentStartId){
+        return seqCurrentStartId;
+      }
+      if (typeof findChronoSegmentStartIdAt==='function'){
+        return findChronoSegmentStartIdAt(t||0);
+      }
+    }catch(_){}
+    return null;
+  }
+
+  function updateMarkerHighlight(t){
+    try{
+      const id = currentSegmentStartId(t);
+      if(id !== lastPlayingMarkerId){
+        setActiveMarkerRowById(id);
+      }
+    }catch(_){}
+  }
+
+  // Expose for external use
+  try{ window.updateMarkerHighlight = updateMarkerHighlight; }catch(_){}
+
+  // Patch updateLyricsHighlight to also refresh marker highlight every time
+  try{
+    const __old = window.updateLyricsHighlight;
+    if (typeof __old === 'function'){
+      window.updateLyricsHighlight = function(t){
+        __old(t);
+        try{ updateMarkerHighlight(t); }catch(_){}
+      };
+    }
+  }catch(_){}
+
+  // Patch renderMarkerList to keep highlight after DOM rebuilds
+  try{
+    const __render = window.renderMarkerList;
+    if (typeof __render === 'function'){
+      window.renderMarkerList = function(){
+        __render();
+        try{
+          const t = (typeof getPlayheadTime==='function') ? getPlayheadTime() : (typeof cursorTime!=='undefined' ? cursorTime : 0);
+          updateMarkerHighlight(t);
+        }catch(_){}
+      };
+    }
+  }catch(_){}
+
+  // Initial apply on load
+  try{
+    const t0 = (typeof getPlayheadTime==='function') ? getPlayheadTime() : (typeof cursorTime!=='undefined' ? cursorTime : 0);
+    updateMarkerHighlight(t0);
+  }catch(_){}
 })();
 </script>
 
