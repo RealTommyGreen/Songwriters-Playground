@@ -195,6 +195,8 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
 .lyricsRow .line{
   min-height:40px; outline:none; white-space:pre-wrap; word-break:break-word;
 }
+
+.markerRow.active{ border-color:#60a5fa; box-shadow:0 0 0 3px rgba(59,130,246,.15) inset; background:linear-gradient(180deg,#0b1220,#0a1320); }
 .lyricsRow.active{ border-color:#60a5fa; box-shadow:0 0 0 3px rgba(59,130,246,.15) inset; background:linear-gradient(180deg,#0b1220,#0a1320); }
 .note-hint{ color:#94a3b8; font-size:12px; text-align:center; }
 /* --- Zusatz: Segment-Header & Toolbar & Toggle --- */
@@ -601,16 +603,6 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
 }
 </style>
 
-
-<style>
-/* === Playback-Highlight im Markerbereich (ähnlich Editor-Zeile) === */
-#markerList .markerRow.playing{
-  border-color:#60a5fa;
-  box-shadow:0 0 0 3px rgba(59,130,246,.15) inset;
-  background:linear-gradient(180deg,#0b1220,#0a1320);
-}
-</style>
-
 </head>
 <body> <!-- Floating Flip-Pfeile --> <button aria-label="Zur rechten Seite wechseln" class="flip-arrow right" id="toRight" title="Zur rechten Seite wechseln">
 <svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
@@ -771,7 +763,13 @@ h1{ margin:0 0 16px; font-size:22px; font-weight:800; letter-spacing:.2px; color
 <span class="icon stop"><svg fill="#fca5a5" viewbox="0 0 24 24"><rect height="12" rx="2" width="12" x="6" y="6"></rect></svg></span>
           Stop
         </button>
+
+<div class="v-gap"></div>
+<div class="note-export" id="exportWrap">
+  <button class="btn big" id="exportWavBtn" title="Custom Arrangement als WAV exportieren">Exportiere Custom Arrangement als WAV</button>
 </div>
+<div id="exportStatus" class="note-hint" style="display:none; text-align:center; margin-top:6px;">Export … 0%</div>
+
 <!-- Marker-Liste -->
 <!-- NEU: Reihenfolge-Schalter --><input accept=".mp3,.wav,audio/*" class="file" id="loadAudioForProject" type="file"/>
 </div>
@@ -1259,8 +1257,8 @@ updatePitchUI();
       let endM   = markers.find(m=>m.pin==='end');
       if(!startM || !endM){
         markers = markers.filter(m=>!m.pin); // alles außer pins behalten, dann frisch anlegen
-        markers.unshift({ id: uid(), time: 0, label: 'Start', active: false, pin: 'start', listOrder: 0, seqReps: 1 });
-        markers.push({ id: uid(), time: duration, label: 'Ende', active: false, pin: 'end', listOrder: 1 });
+        markers.unshift({ id: uid(), time: 0, label: 'Start', active: true,  pin: 'start', listOrder: 0, seqReps: 1 });
+        markers.push({ id: uid(), time: duration, label: 'Ende', active: true,  pin: 'end', listOrder: 1 });
       }else{
         startM.time = 0;
         endM.time = duration;
@@ -1532,6 +1530,7 @@ function getLoopRegion(){
         curLabel.textContent = formatTime(t);
         draw();
         updateLyricsHighlight(t);
+        updateMarkerRowHighlight(t);
         rafId = requestAnimationFrame(pump);
       };
       rafId = requestAnimationFrame(pump);
@@ -1566,6 +1565,7 @@ function getLoopRegion(){
 
   draw();
   updateLyricsHighlight(cursorTime);
+      updateMarkerRowHighlight(cursorTime);
 }
 
   function startEngineAt(offset){
@@ -1604,7 +1604,8 @@ function getLoopRegion(){
     function restartEngineAt(t){ if(!audioBuffer) return; startEngineAt(t); }
 
     function resumeWithUpdatedLoopPreservingPhase(){
-      if(!usingEngine){ draw(); updateLyricsHighlight(cursorTime); return; }
+      if(!usingEngine){ draw(); updateLyricsHighlight(cursorTime);
+      updateMarkerRowHighlight(cursorTime); return; }
       const prevT = getPlayheadTime();
       const {s,e} = getLoopRegion();
       let target = prevT;
@@ -1740,7 +1741,7 @@ idx.addEventListener('pointercancel', ()=>{
 function ensureDefaultStartEndMarkers() {
   if (!Number.isFinite(duration) || duration <= 0) return;
   if (Array.isArray(markers) && markers.length === 0) {
-    const startM = { id: uid(), time: 0, label: 'Start', active: false, pin: 'start', listOrder: 0, seqReps: 1 };
+    const startM = { id: uid(), time: 0, label: 'Start', active: true,  pin: 'start', listOrder: 0, seqReps: 1 };
     const endM   = { id: uid(), time: duration, label: 'Ende',  active: true,  pin: 'end', listOrder: 1 };
     markers.push(startM, endM);
     reindexListOrder();
@@ -1769,7 +1770,46 @@ function ensureDefaultStartEndMarkers() {
       }
     }
 
-    function updateLyricsHighlight(t){
+    
+    // --- Marker-Listen-Highlight (Original vs. Kopie in Reihenfolge) ---
+    let lastActiveMarkerRowId = null;
+    function setActiveMarkerRowById(id){
+      try{
+        const list = document.getElementById('markerList');
+        if(!list) return;
+        // Remove previous
+        const prev = lastActiveMarkerRowId ? list.querySelector('.markerRow[data-id="'+CSS.escape(lastActiveMarkerRowId)+'"]') : null;
+        if(prev) prev.classList.remove('active');
+        // Set new
+        if(id){
+          const row = list.querySelector('.markerRow[data-id="'+CSS.escape(id)+'"]');
+          if(row) row.classList.add('active');
+        }
+        lastActiveMarkerRowId = id || null;
+      }catch(_){}
+    }
+
+    function updateMarkerRowHighlight(t){
+      try{
+        const list = document.getElementById('markerList');
+        if(!list) return;
+        const seqOn = !!(typeof playSeqOrder!=='undefined' && playSeqOrder) && !!(typeof usingEngine!=='undefined' && usingEngine) && !(window.quickLoop && window.quickLoop.active);
+        let id = null;
+        if(seqOn){
+          // In Reihenfolge-Modus highlighten wir ausschließlich den tatsächlich gespielten Eintrag (Kopie ODER Original)
+          id = (typeof seqCurrentStartId !== 'undefined') ? (seqCurrentStartId || null) : null;
+        }else{
+          // Ansonsten (normaler Zeitablauf / Scrubben) highlighten wir den Originalmarker des aktuellen Chrono-Segments
+          const startId = (typeof findChronoSegmentStartIdAt === 'function') ? findChronoSegmentStartIdAt(t||0) : null;
+          if(startId){
+            const m = (typeof getMarkerById === 'function') ? getMarkerById(startId) : null;
+            id = (m && m.playlistClone === true && m.playlistCloneOf) ? m.playlistCloneOf : startId;
+          }
+        }
+        setActiveMarkerRowById(id);
+      }catch(_){}
+    }
+function updateLyricsHighlight(t){
       const { lines } = computeCounts();
       if(lines<=0){ setActiveLine(-1); return; }
       const bl = barLen();
@@ -1918,16 +1958,7 @@ function ensureDefaultStartEndMarkers() {
           ctx.strokeStyle=color; ctx.beginPath();
           if(labelTop){ ctx.moveTo(x, ly+h); ctx.lineTo(x, waveTop); } else { ctx.moveTo(x, ly); ctx.lineTo(x, waveBottom); }
           ctx.stroke();
-          const __HIT_PAD = 8;
-const __LINE_HIT_W = 22;
-const __lineRectY = topLabelY;
-const __lineRectH = (bottomLabelY + LABEL_H) - __lineRectY;
-renderHit.set(m.id, {
-  x,
-  labelRect: { x: lx, y: ly, w, h },
-  lineRect: { x: Math.max(0, x - __LINE_HIT_W/2), y: __lineRectY, w: __LINE_HIT_W, h: __lineRectH },
-  pad: __HIT_PAD
-});
+          renderHit.set(m.id, { x, labelRect:{x:lx,y:ly,w,h} });
         });
       }
 
@@ -1945,6 +1976,7 @@ renderHit.set(m.id, {
 
       // Auch im Pause-/Scrub-Zustand Zeilen-Highlight aktualisieren
       updateLyricsHighlight(cursorTime);
+      updateMarkerRowHighlight(cursorTime);
     }
 
     // --- Cursor setzen (Snap bleibt) ---
@@ -1958,19 +1990,15 @@ renderHit.set(m.id, {
 
     // --- Interaktion (Drag Cursor / Pan / Pinch) + Marker UI ---
     function hitMarkerLabel(ev){
-  const rect = wave.getBoundingClientRect();
-  const px = ev.clientX - rect.left, py = ev.clientY - rect.top;
-  for(const m of markers){
-    const hit = renderHit.get(m.id); if(!hit) continue;
-    const pad = Number.isFinite(hit.pad) ? hit.pad : 0;
-    const r = hit.labelRect;
-    const inLabel = (px >= (r.x - pad) && px <= (r.x + r.w + pad) && py >= (r.y - pad) && py <= (r.y + r.h + pad));
-    const lr = hit.lineRect;
-    const inLine = lr && (px >= lr.x && px <= (lr.x + lr.w) && py >= lr.y && py <= (lr.y + lr.h));
-    if(inLabel || inLine) return m;
-  }
-  return null;
-}
+      const rect = wave.getBoundingClientRect();
+      const px = ev.clientX - rect.left, py = ev.clientY - rect.top;
+      for(const m of markers){
+        const hit = renderHit.get(m.id); if(!hit) continue;
+        const r = hit.labelRect;
+        if(px>=r.x && px<=r.x+r.w && py>=r.y && py<=r.y+r.h) return m;
+      }
+      return null;
+    }
 
     wave.addEventListener('pointerdown', (ev)=>{
       if(duration<=0) return;
@@ -2121,14 +2149,31 @@ renderHit.set(m.id, {
       setView(newStart, targetDur); draw();
     }, { passive:false });
 
+    
     // --- Projekt speichern/laden (+ Lyrics) ---
     function currentProject(){
+      // Serialize *all* marker properties that matter for restoring the UI/logic
+      const mm = (Array.isArray(markers) ? markers : []).map((m,i)=> ({
+        id: m.id || uid(),
+        time: +m.time || 0,
+        label: (m.label || ''),
+        active: !!m.active,
+        // arrangement / ordering
+        listOrder: Number.isFinite(m.listOrder) ? +m.listOrder : i,
+        // optional flags/fields
+        pin: (m.pin || undefined),
+        seqReps: Number.isFinite(m.seqReps) ? Math.max(0, Math.floor(m.seqReps)) : (m.playlistClone === true ? 1 : 1),
+        muted: (m.muted === true),
+        playlistClone: (m.playlistClone === true),
+        playlistCloneOf: (m.playlistCloneOf || undefined),
+        note: (typeof m.note === 'string' ? m.note : undefined)
+      }));
       return {
-        version:20,
+        version: 20,
         timeSig: beatsPerBar,
         bpm: bpm(),
         cursorTime,
-        markers: markers.map(m=>({ id:m.id, time:+m.time||0, label:m.label||'', active:!!m.active, listOrder: Number.isFinite(m.listOrder)? m.listOrder : 0 })),
+        markers: mm,
         viewStart, viewDur,
         lyrics: Array.isArray(lyrics) ? lyrics.slice() : [],
         relativeAudio: relativeAudioName || (loadedFileMeta ? loadedFileMeta.name : null),
@@ -2137,6 +2182,7 @@ renderHit.set(m.id, {
         playSeqOrder: !!playSeqOrder
       };
     }
+
     function downloadJson(obj,filename){
       const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
       const url=URL.createObjectURL(blob); const a=document.createElement('a');
@@ -2174,7 +2220,22 @@ bpmInput.value = json.bpm || 120;
         } catch(_) {}
 
 cursorTime = +json.cursorTime || 0;
-        markers = Array.isArray(json.markers) ? json.markers.map((m,i)=>({ id:m.id||uid(), time:+m.time||0, label:m.label||'', active:!!m.active, listOrder: Number.isFinite(m.listOrder)? +m.listOrder : i })) : [];
+        
+        markers = Array.isArray(json.markers) ? json.markers.map((m,i)=>({
+          id: m.id || uid(),
+          time: +m.time || 0,
+          label: (m.label || ''),
+          active: !!m.active,
+          listOrder: Number.isFinite(m.listOrder) ? +m.listOrder : i,
+          // optional (keine Pflicht im alten Format)
+          pin: (m.pin || undefined),
+          seqReps: Number.isFinite(m.seqReps) ? Math.max(0, Math.floor(m.seqReps)) : 1,
+          muted: (m.muted === true),
+          playlistClone: (m.playlistClone === true),
+          playlistCloneOf: (m.playlistCloneOf || undefined),
+          note: (typeof m.note === 'string' ? m.note : undefined)
+        })) : [];
+
         markers.sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
         const vs = Number.isFinite(json.viewStart)? +json.viewStart : 0;
         const vd = Number.isFinite(json.viewDur) && json.viewDur>0 ? +json.viewDur : (duration||0);
@@ -2193,7 +2254,7 @@ cursorTime = +json.cursorTime || 0;
           if(isFinite(blAuto) && blAuto > 0){
             const headersAuto = [];
             (markers||[])
-              .filter(m=> (m.label||'').trim().length>0 && m.pin!=='start' && m.pin!=='end' && m.playlistClone !== true)
+              .filter(m=> (m.label||'').trim().length>0 && m.playlistClone !== true)
               .forEach(m=>{
                 const barNumber = Math.floor((m.time + EPS) / blAuto) + 1; // 1-basiert
                 const lineIdx   = Math.floor((barNumber - 1) / 2) + 1;     // 2 Takte pro Zeile
@@ -2592,6 +2653,7 @@ row.appendChild(handle);
     row.appendChild(controls);
     markerListEl.appendChild(row);
   });
+  try{ updateMarkerRowHighlight(cursorTime); }catch(_){}
 }
 // --- Buttons ---
     addMarkerBtn.addEventListener('click', ()=>{
@@ -2625,6 +2687,186 @@ row.appendChild(handle);
     document.getElementById('floatPlay')?.addEventListener('click', async ()=>{ await ensureACResumed(); startEngineAt(cursorTime); });
     document.getElementById('floatStop')?.addEventListener('click', ()=>{ stopEngine(); });
 
+// --- Export WAV (Custom Arrangement) ---
+const exportWavBtn = document.getElementById('exportWavBtn');
+const exportStatus = document.getElementById('exportStatus');
+
+function __markersByList(){
+  if(!Array.isArray(markers)) return [];
+  return markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
+}
+function __markersByTime(){
+  if(!Array.isArray(markers)) return [];
+  return markers.slice().sort((a,b)=> (a.time ?? 0) - (b.time ?? 0) || (a.id || '').localeCompare(b.id||''));
+}
+function __getMarkerById(id){
+  return (markers||[]).find(m=> m && m.id === id) || null;
+}
+function __segmentEndTimeForStartId(id){
+  const m = __getMarkerById(id); if(!m) return duration || 0;
+  const t0 = Math.max(0, Math.min(duration||0, m.time||0));
+  const chrono = __markersByTime();
+  const idx = chrono.findIndex(x=> x.id === id);
+  let end = duration || 0;
+  for(let i=idx+1;i<chrono.length;i++){
+    const mm = chrono[i];
+    if((mm.time||0) > t0 + 1e-6){ end = mm.time||0; break; }
+  }
+  return Math.max(t0, Math.min(end, duration||0));
+}
+function __repsFor(id){
+  const m = __getMarkerById(id);
+  const r = Math.max(1, Math.floor((m && m.seqReps) ? m.seqReps : 1));
+  return isFinite(r) ? r : 1;
+}
+function __isMutedOriginal(m){
+  return !!(m && m.muted === true && m.playlistClone !== true);
+}
+
+function buildArrangementSegmentsSR(sr){
+  try{ if(typeof ensureListOrder === 'function') ensureListOrder(); }catch(_){}
+  const list = __markersByList();
+  const segs = [];
+  for(const m of list){
+    if(!m || m.pin === 'end') continue;
+    if(__isMutedOriginal(m)) continue;
+    const s = Math.max(0, Math.min(duration||0, m.time||0));
+    const e = __segmentEndTimeForStartId(m.id);
+    const len = e - s;
+    if(!(len > 1e-4)) continue;
+    const reps = __repsFor(m.id);
+    const sSmp = Math.floor(s * sr);
+    const eSmp = Math.floor(e * sr);
+    for(let i=0;i<reps;i++){
+      segs.push({ s: sSmp, e: eSmp });
+    }
+  }
+  return segs;
+}
+
+function encodeWavFromBuffer(buf){
+  const numCh = buf.numberOfChannels|0;
+  const sr = buf.sampleRate|0;
+  const len = buf.length|0;
+
+  const outLenBytes = 44 + len * numCh * 2;
+  const ab = new ArrayBuffer(outLenBytes);
+  const view = new DataView(ab);
+
+  function writeString(off, str){
+    for(let i=0;i<str.length;i++) view.setUint8(off+i, str.charCodeAt(i));
+  }
+  function write16(off, v){ view.setUint16(off, v, true); }
+  function write32(off, v){ view.setUint32(off, v, true); }
+
+  // RIFF header
+  writeString(0, 'RIFF');
+  write32(4, 36 + len * numCh * 2);
+  writeString(8, 'WAVE');
+  // fmt chunk
+  writeString(12, 'fmt ');
+  write32(16, 16);           // PCM chunk size
+  write16(20, 1);            // PCM format
+  write16(22, numCh);
+  write32(24, sr);
+  write32(28, sr * numCh * 2);
+  write16(32, numCh * 2);
+  write16(34, 16);
+  // data chunk
+  writeString(36, 'data');
+  write32(40, len * numCh * 2);
+
+  // Interleave + write
+  const chData = Array.from({length:numCh}, (_,c)=> buf.getChannelData(c));
+  let offset = 44;
+  for(let i=0;i<len;i++){
+    for(let ch=0; ch<numCh; ch++){
+      let s = chData[ch][i] || 0;
+      s = Math.max(-1, Math.min(1, s));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+  return new Blob([ab], { type: 'audio/wav' });
+}
+
+async function exportArrangementWav(){
+  if(!audioBuffer || !duration){ alert('Bitte zuerst eine Audiodatei laden.'); return; }
+  try{
+    if(exportStatus){ exportStatus.style.display = 'block'; exportStatus.textContent = 'Bereite Export vor…'; }
+    if(exportWavBtn){ exportWavBtn.disabled = true; exportWavBtn.textContent = 'Exportiere…'; }
+
+    // Source buffer (respect pitch)
+    const srcBuf = (typeof getPlaybackBuffer === 'function' ? (getPlaybackBuffer() || audioBuffer) : audioBuffer);
+    const sr = srcBuf.sampleRate|0;
+    const numCh = srcBuf.numberOfChannels|0;
+
+    // Build segments
+    const segs = buildArrangementSegmentsSR(sr);
+    if(!segs.length){
+      if(exportStatus){ exportStatus.textContent = 'Kein Inhalt im Custom Arrangement.'; }
+      if(exportWavBtn){ exportWavBtn.disabled=false; exportWavBtn.textContent='Export as WAV'; }
+      return;
+    }
+
+    // Total length
+    let total = 0;
+    for(const seg of segs){ total += Math.max(0, (seg.e|0) - (seg.s|0)); }
+    const outBuf = (typeof createNewBuffer === 'function') ? createNewBuffer(numCh, total, sr) : null;
+    if(!outBuf){ alert('Konnte Zielpuffer nicht erstellen.'); if(exportStatus){ exportStatus.style.display='none'; } if(exportWavBtn){ exportWavBtn.disabled=false; exportWavBtn.textContent='Export as WAV'; } return; }
+
+    // Copy with progress (chunked)
+    const CHUNK = 262144; // samples per chunk
+    const srcCh = Array.from({length:numCh}, (_,c)=> srcBuf.getChannelData(c));
+    const dstCh = Array.from({length:numCh}, (_,c)=> outBuf.getChannelData(c));
+    let dstPos = 0;
+    let done = 0;
+
+    for(let idx=0; idx<segs.length; idx++){
+      const {s, e} = segs[idx];
+      const len = Math.max(0, (e|0) - (s|0));
+      let copied = 0;
+      while(copied < len){
+        const n = Math.min(CHUNK, len - copied);
+        for(let ch=0; ch<numCh; ch++){
+          dstCh[ch].set(srcCh[ch].subarray(s + copied, s + copied + n), dstPos);
+        }
+        copied += n;
+        dstPos += n;
+        done += n;
+
+        // UI progress
+        if((done & 0xFFFF) === 0){
+          const pct = Math.max(0, Math.min(100, Math.round((done / total) * 100)));
+          if(exportStatus){ exportStatus.textContent = `Export … ${pct}%`; }
+          await new Promise(requestAnimationFrame);
+        }
+      }
+    }
+
+    if(exportStatus){ exportStatus.textContent = 'WAV erstellen…'; }
+    const blob = encodeWavFromBuffer(outBuf);
+    const a = document.createElement('a');
+    const base = (typeof loadedFileMeta !== 'undefined' && loadedFileMeta && loadedFileMeta.name) ? (loadedFileMeta.name.replace(/\.[^.]+$/,'') || 'track') : 'track';
+    a.download = `${base}-arrangement.wav`;
+    a.href = URL.createObjectURL(blob);
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+    if(exportStatus){ exportStatus.textContent = 'Fertig ✅'; }
+  } catch(err){
+    console.warn('Export WAV failed:', err);
+    alert('Export fehlgeschlagen: ' + (err && err.message ? err.message : err));
+    if(exportStatus){ exportStatus.style.display = 'none'; }
+  } finally {
+    if(exportWavBtn){ exportWavBtn.disabled = false; exportWavBtn.textContent = 'Export as WAV'; }
+  }
+}
+
+if(exportWavBtn){ exportWavBtn.addEventListener('click', exportArrangementWav); }
+
+
 
     clearBtn.addEventListener('click', ()=>{
       stopEngine();
@@ -2642,7 +2884,7 @@ row.appendChild(handle);
           if(!isFinite(bl) || bl<=0){ alert('Bitte BPM einstellen, damit Takte berechnet werden können.'); perSegmentLineNumbering=false; return; }
           const headers = [];
           (markers||[])
-            .filter(m=> (m.label||'').trim().length>0 && m.pin!=='start' && m.pin!=='end' && m.playlistClone !== true)
+            .filter(m=> (m.label||'').trim().length>0 && m.playlistClone !== true)
             .forEach(m=>{
               const barNumber = Math.floor((m.time + EPS) / bl) + 1; // 1-basiert
               const lineIdx = Math.floor((barNumber - 1) / 2) + 1;    // 2 Takte pro Zeile, 1-basiert
@@ -2689,7 +2931,7 @@ function buildExportPopupText(){
   const headers = [];
   if (isFinite(bl) && bl > 0) {
     (markers||[])
-      .filter(m => (m.label || '').trim().length > 0 && m.pin!=='start' && m.pin!=='end' && m.playlistClone !== true)
+      .filter(m => (m.label || '').trim().length > 0 && m.playlistClone !== true)
       .forEach(m => {
         const barNumber = Math.floor((m.time + EPS) / bl) + 1; // 1-basiert
         const lineIdx   = Math.floor((barNumber - 1) / 2) + 1; // 2 Takte pro Zeile
@@ -2726,7 +2968,7 @@ function buildExportPopupText(){
       const headers = [];
       if (isFinite(bl) && bl > 0) {
         markers
-          .filter(m => (m.label || '').trim().length > 0 && m.pin!=='start' && m.pin!=='end' && m.playlistClone !== true)
+          .filter(m => (m.label || '').trim().length > 0 && m.playlistClone !== true)
           .forEach(m => {
             const barNumber = Math.floor((m.time + EPS) / bl) + 1; // 1-basiert
             const lineIdx   = Math.floor((barNumber - 1) / 2) + 1; // 2 Takte pro Zeile
@@ -2885,7 +3127,7 @@ document.addEventListener('click', async (e) => {
     return nxt ? nxt.id : null;
   }
 
-  function smoothJumpTo(t){
+  function smoothJumpTo(t, whenAbs){
   try {
     // Falls Engine nicht läuft: Cursor setzen & ggf. starten
     if(!(typeof usingEngine !== 'undefined' && usingEngine)){
@@ -2901,24 +3143,31 @@ document.addEventListener('click', async (e) => {
     }
 
     const now  = ac.currentTime;
-    const JUMP_LEAD   = 0.030; // 30ms voraus planen
-    const FADE_OUT_MS = 0.025; // 25ms Fade-Out (alt)
-    const FADE_IN_MS  = 0.025; // 25ms Fade-In (neu)
-    const when = now + JUMP_LEAD;
+    const MIN_LEAD   = 0.012;   // minimale Vorlaufzeit zum sicheren Planen (~12ms)
+    const FADE_MS    = 0.008;   // sehr kurze De‑Click Crossfade (~8ms)
 
-    // Altes Signal ausblenden und stop zeitgenau planen
+    // Wenn eine absolute Kontextzeit übergeben wurde (exakter Segment‑Boundary),
+    // dann exakt dort springen; sonst mit MIN_LEAD in der Zukunft.
+    let when = (Number.isFinite(whenAbs) && whenAbs > (now + 0.002)) ? whenAbs : (now + MIN_LEAD);
+    // Safety: nicht zu weit in die Zukunft verschieben
+    if (when < now + 0.002) when = now + 0.002;
+
+    // Altes Signal kurz vor 'when' ausblenden und Stop genau an 'when'
     try{
       if (engineGain && engineGain.gain){
+        const fadeStart = Math.max(now, when - FADE_MS);
         engineGain.gain.cancelScheduledValues(now);
+        // aktuellen Wert halten bis zum FadeStart
         engineGain.gain.setValueAtTime(engineGain.gain.value, now);
+        engineGain.gain.setValueAtTime(1, fadeStart);
         engineGain.gain.linearRampToValueAtTime(0, when);
       }
       if (engineSource && typeof engineSource.stop === 'function'){
-        try { engineSource.stop(when + 0.002); } catch(_){}
+        try { engineSource.stop(when + 0.004); } catch(_){}
       }
     }catch(_){}
 
-    // Neuen Source/Gain aufbauen, start & Fade-In planen
+    // Neuen Source/Gain aufbauen, Start & Fade‑In planen
     const src = ac.createBufferSource();
     src.buffer = getPlaybackBuffer() || audioBuffer;
     src.loop = false;
@@ -2926,9 +3175,10 @@ document.addEventListener('click', async (e) => {
     src.loopEnd   = duration || 0;
 
     const g = ac.createGain();
+    // Start bei 0 und sanftes Einblenden ab 'when'
     g.gain.setValueAtTime(0, now);
     g.gain.setValueAtTime(0, when);
-    g.gain.linearRampToValueAtTime(1, when + FADE_IN_MS);
+    g.gain.linearRampToValueAtTime(1, when + FADE_MS);
 
     src.connect(g); g.connect(masterGain);
 
@@ -3021,6 +3271,9 @@ document.addEventListener('click', async (e) => {
         
 
         
+// Exakte Kontextzeit, wann wir den Segment‑Boundary erreichen werden
+const __whenAbs = (typeof engineStartCtxTime==='number' && typeof engineStartOffset==='number')
+  ? (engineStartCtxTime + Math.max(0, segEnd - engineStartOffset)) : NaN;
 // --- FIX: sofort zum nächsten Marker springen, falls der aktuelle (z.B. der erste bei 0:00) gemutet ist ---
 try{
   const __curM = getMarkerById(seqCurrentStartId);
@@ -3042,7 +3295,7 @@ try{
       // Optional: Wiederholungszähler zurücksetzen, falls genutzt
       try{ __seqRepsLeft = 1; }catch(_){}
       const __mN0 = getMarkerById(__nid);
-      if (__mN0) smoothJumpTo(__mN0.time||0);
+      if (__mN0) smoothJumpTo(__mN0.time||0, __whenAbs);
       __seqRaf = requestAnimationFrame(__seqMonitor);
       return;
     }
@@ -3064,7 +3317,7 @@ if (t >= segEnd - 0.02){
         seqCurrentStartId = nid0;
         __seqRepsLeft = repsFor(nid0);
         const mN0 = getMarkerById(nid0);
-        if (mN0) smoothJumpTo(mN0.time||0);
+        if (mN0) smoothJumpTo(mN.time||0, __whenAbs);
         __seqRaf = requestAnimationFrame(__seqMonitor);
         return;
       }
@@ -3128,14 +3381,14 @@ function firstPlayableId(){
       const mN = getMarkerById(nid);
       seqCurrentStartId = nid;
       __seqRepsLeft = repsFor(nid);
-      if (mN) smoothJumpTo(mN.time||0);
+      if (mN) smoothJumpTo(mN.time||0, __whenAbs);
     } else {
       const __fid = (typeof firstPlayableId === 'function') ? firstPlayableId() : null;
       if (__fid){
         const __mF = getMarkerById(__fid);
         seqCurrentStartId = __fid;
         try{ __seqRepsLeft = (typeof repsFor === 'function') ? repsFor(__fid) : 1; }catch(_){}
-        if (__mF) smoothJumpTo(__mF.time||0);
+        if (__mF) smoothJumpTo(__mF.time||0, __whenAbs);
       } else {
         try{ if(typeof stopEngine === 'function') __orig_stopEngine(); }catch(_){}
         __seqRaf = 0; return;
@@ -3144,21 +3397,21 @@ function firstPlayableId(){
   } else {
     if (__seqRepsLeft > 1){
       __seqRepsLeft -= 1;
-      smoothJumpTo(segStart); // wieder an Segmentanfang springen
+      smoothJumpTo(segStart, __whenAbs); // wieder an Segmentanfang springen
     } else {
       const nid = nextPlayableId(seqCurrentStartId);
       if (nid){
         const mN = getMarkerById(nid);
         seqCurrentStartId = nid;
         __seqRepsLeft = repsFor(nid);
-        if (mN) smoothJumpTo(mN.time||0);
+        if (mN) smoothJumpTo(mN.time||0, __whenAbs);
       } else {
         const __fid = (typeof firstPlayableId === 'function') ? firstPlayableId() : null;
       if (__fid){
         const __mF = getMarkerById(__fid);
         seqCurrentStartId = __fid;
         try{ __seqRepsLeft = (typeof repsFor === 'function') ? repsFor(__fid) : 1; }catch(_){}
-        if (__mF) smoothJumpTo(__mF.time||0);
+        if (__mF) smoothJumpTo(__mF.time||0, __whenAbs);
       } else {
         try{ if(typeof stopEngine === 'function') __orig_stopEngine(); }catch(_){}
         __seqRaf = 0; return;
@@ -3382,29 +3635,7 @@ function firstPlayableId(){
 </script>
 <!-- ===== Ende Playlist-Dominanz & Jump-Guard Patch ===== -->
 <script>
-/* ===== Save Patch: persist seqReps on markers ===== */
-(function(){
-  try{
-    const __orig_currentProject = window.currentProject;
-    if (typeof __orig_currentProject === 'function'){
-      window.currentProject = function(){
-        const proj = __orig_currentProject();
-        try{
-          proj.markers = (window.markers||[]).map(m => ({
-            id: m.id,
-            time: +m.time||0,
-            label: m.label||'',
-            active: !!m.active,
-            pin: m.pin || undefined,
-            listOrder: Number.isFinite(m.listOrder)? m.listOrder : 0,
-            seqReps: Number.isFinite(m.seqReps) ? Math.max(0, Math.floor(m.seqReps)) : 1
-          }));
-        }catch(_){}
-        return proj;
-      };
-    }
-  }catch(_){}
-})();
+<!-- Save patch merged into currentProject; wrapper removed to avoid double-wrapping. -->
 </script>
 <!-- === Rhyme popover for editor lines === -->
 <div aria-live="polite" id="rhyme-popover" role="dialog" style="position: fixed; z-index: 99999; display:none; max-width: 360px; background:#0b1220; border:1px solid #334155; border-radius:12px; box-shadow:0 12px 36px rgba(0,0,0,.55); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow:hidden;">
@@ -3714,6 +3945,7 @@ function firstPlayableId(){
       console.warn('Arrangement lock init failed:', e);
     }
   });
+  try{ updateMarkerRowHighlight(cursorTime); }catch(_){}
 })();
 </script>
 <!-- === Export Popup (Modal) === -->
@@ -3908,7 +4140,7 @@ Aktiviere und deaktiviere Marker mit Antippen. Zwei rote Marker ergeben einen Lo
 
 Ein aktivierter Loop deaktiviert automatisch ein Custom Arrangement.
 
-Ein Double Tap auf die Stop Taste lässt den Cursor zum Anfang des Loops springen.</pre>
+Doppeltes Tippen auf die Stop Taste lässt den Cursor zum Startmarker des Loops springen.</pre>
 </div>
 </div>
 </div>
@@ -3934,9 +4166,11 @@ Kopiere deine Abschnitte beliebig oft und puzzle dir deinen ultimativen Beat.
 
 Mute Bereiche, die dir nicht gefallen. Diese werden beim Abspielen komplett ausgelassen. 
 
+Exportiere dein Custom Arrangement als WAV Audiodatei und nimm sie mit ins Studio. 
+
 Ein aktiviertes Custom Arrangement deaktiviert Loops automatisch.
 
-Ein Double Tap auf die Stop Taste lässt den Cursor zum Anfang des Arrangements springen.</pre></div></div></div><script>
+Doppeltes Tippen auf die Stop Taste lässt den Cursor zum Beginn des Arrangements springen.</pre></div></div></div><script>
 (function(){
   const btn = document.getElementById('seqHelp');
   const modal = document.getElementById('seqHelpModal');
@@ -4044,130 +4278,78 @@ document.addEventListener('DOMContentLoaded', function(){
 </script>
 
 
-<!-- === Double‑Tap Stop → Smart Home (Loop‑aware) === -->
+<!-- Double-Tap Stop Feature: loop-marker aware cursor positioning -->
 <script>
+// --- Stop: Single vs. Double Tap Verhalten (Marker-Loop aware) ---
 (function(){
-  function moveCursorSmartHome(){
-    try {
-      // Default: go to absolute start (0:00)
-      let target = 0;
-      try{
-        if (typeof getLoopRegion === 'function'){
-          const r = getLoopRegion();
-          const loopActive = r && r.mode && r.mode !== 'full' && Number.isFinite(r.s);
-          if(loopActive) target = Math.max(0, +r.s || 0); // jump to loop start if a loop is active
-        }
-      }catch(_){}
-
-      if (typeof setCursor === 'function') { setCursor(target, true); }
-      else {
-        window.cursorTime = target;
-        if (window.curLabel && typeof formatTime==='function') curLabel.textContent = formatTime(target);
-      }
-      if (typeof updateLyricsHighlight === 'function') updateLyricsHighlight(target);
-      if (typeof draw === 'function') draw();
-    } catch(_) {}
-  }
-  function wireDoubleTapToStop(btn){
+  const DOUBLE_MS = 320;
+  function wireStopDblTap(btn){
     if(!btn) return;
-    // Desktop: klassisches Doppelklicken
-    btn.addEventListener('dblclick', function(e){
-      try{ e.preventDefault(); e.stopPropagation(); }catch(_){}
-      try{ if (typeof stopEngine === 'function') stopEngine(); }catch(_){}
-      moveCursorSmartHome();
-    });
-    // Touch: Double‑Tap Erkennung via Pointer Events
-    let lastTap = 0;
-    btn.addEventListener('pointerdown', function(e){
-      const now = (window.performance && performance.now) ? performance.now() : Date.now();
-      const dt = now - lastTap;
-      lastTap = now;
-      if (dt > 0 && dt < 320){ // ~0.32s Double‑Tap Fenster
-        try{ e.preventDefault(); e.stopPropagation(); }catch(_){}
-        try{ if (typeof stopEngine === 'function') stopEngine(); }catch(_){}
-        moveCursorSmartHome();
-      }
-    }, { passive:false });
-  }
-  // Beide Stop-Buttons verkabeln
-  wireDoubleTapToStop(document.getElementById('pauseBtn'));
-  wireDoubleTapToStop(document.getElementById('floatStop'));
-})();
-</script>
+    let last = 0, clearTok = null;
 
-<!-- === Injection: Marker-Playback-Highlight (Outline aktuell spielendes Segment) === -->
-<script>
-(function(){
-  let lastPlayingMarkerId = null;
+    btn.addEventListener('click', ()=>{
+      // 1) Erster Tap bleibt: wirklich stoppen (greift zusätzlich zu vorhandenen Listeners)
+      try { if (typeof stopEngine === 'function') stopEngine(); } catch(_){}
 
-  function setActiveMarkerRowById(id){
-    try{
-      const list = document.getElementById('markerList');
-      if(!list) return;
-      const prev = list.querySelector('.markerRow.playing');
-      if(prev) prev.classList.remove('playing');
-      lastPlayingMarkerId = null;
-      if(!id) return;
-      const sel = '.markerRow[data-id="' + CSS.escape(String(id)) + '"]';
-      const row = list.querySelector(sel);
-      if(row){ row.classList.add('playing'); lastPlayingMarkerId = id; }
-    }catch(_){}
-  }
+      // 2) Double-Tap erkennen
+      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (now - last < DOUBLE_MS){
+        // --- Double-Tap ---
+        clearTimeout(clearTok); last = 0;
 
-  function currentSegmentStartId(t){
-    try{
-      if (typeof playSeqOrder!=='undefined' && playSeqOrder && typeof seqCurrentStartId!=='undefined' && seqCurrentStartId){
-        return seqCurrentStartId;
-      }
-      if (typeof findChronoSegmentStartIdAt==='function'){
-        return findChronoSegmentStartIdAt(t||0);
-      }
-    }catch(_){}
-    return null;
-  }
-
-  function updateMarkerHighlight(t){
-    try{
-      const id = currentSegmentStartId(t);
-      if(id !== lastPlayingMarkerId){
-        setActiveMarkerRowById(id);
-      }
-    }catch(_){}
-  }
-
-  // Expose for external use
-  try{ window.updateMarkerHighlight = updateMarkerHighlight; }catch(_){}
-
-  // Patch updateLyricsHighlight to also refresh marker highlight every time
-  try{
-    const __old = window.updateLyricsHighlight;
-    if (typeof __old === 'function'){
-      window.updateLyricsHighlight = function(t){
-        __old(t);
-        try{ updateMarkerHighlight(t); }catch(_){}
-      };
-    }
-  }catch(_){}
-
-  // Patch renderMarkerList to keep highlight after DOM rebuilds
-  try{
-    const __render = window.renderMarkerList;
-    if (typeof __render === 'function'){
-      window.renderMarkerList = function(){
-        __render();
+        // Regel:
+        // - Custom Arrangement aktiv? -> 0:00
+        // - sonst: genau 2 aktive Marker? -> zum Startmarker
+        // - sonst -> 0:00
+        let target = 0;
         try{
-          const t = (typeof getPlayheadTime==='function') ? getPlayheadTime() : (typeof cursorTime!=='undefined' ? cursorTime : 0);
-          updateMarkerHighlight(t);
+          const seqOn = !!(typeof window !== 'undefined' && window.playSeqOrder); // Custom Arrangement an?
+          if(!seqOn){
+            const act = (typeof getActiveMarkersSorted === 'function') ? getActiveMarkersSorted() : [];
+            if(Array.isArray(act) && act.length === 2){
+              const t0 = (act[0] && typeof act[0].time === 'number') ? act[0].time : 0;
+              const t1 = (act[1] && typeof act[1].time === 'number') ? act[1].time : 0;
+              target = Math.min(t0, t1);
+            }
+          }
         }catch(_){}
-      };
-    }
-  }catch(_){}
 
-  // Initial apply on load
-  try{
-    const t0 = (typeof getPlayheadTime==='function') ? getPlayheadTime() : (typeof cursorTime!=='undefined' ? cursorTime : 0);
-    updateMarkerHighlight(t0);
-  }catch(_){}
+        try { if (typeof setCursor === 'function') setCursor(target, true); } catch(_){}
+        try { if (typeof draw === 'function') draw(); } catch(_){}
+        return;
+      }
+
+      // Single-Tap Fenster öffnen
+      last = now;
+      clearTimeout(clearTok);
+      clearTok = setTimeout(()=>{ last = 0; }, DOUBLE_MS + 40);
+    }, { passive: true });
+  }
+
+  // Mögliche Stop-Buttons im UI auffinden
+  const candidates = [
+    // häufige IDs / Referenzen
+    (typeof pauseBtn !== 'undefined' ? pauseBtn : null),
+    document.getElementById('pauseBtn'),
+    document.getElementById('stopBtn'),
+    document.getElementById('floatStop'),
+    // Buttons, die Stop symbolisieren könnten
+    ...Array.from(document.querySelectorAll('button, .btn, .control, [role="button"]')).filter(el=>{
+      const tx = (el.textContent || '').toLowerCase();
+      const id = (el.id || '').toLowerCase();
+      const cls = (el.className || '').toLowerCase();
+      return /stop|pause/.test(tx) || /stop|pause/.test(id) || /stop|pause/.test(cls);
+    })
+  ].filter(Boolean);
+
+  // Dedupe
+  const seen = new Set();
+  const unique = [];
+  for(const el of candidates){
+    if(el && !seen.has(el)) { unique.push(el); seen.add(el); }
+  }
+
+  unique.forEach(wireStopDblTap);
 })();
 </script>
 
